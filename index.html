@@ -1,0 +1,1757 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pustika: study printing layouts for PDFs, notes and flash cards</title>
+<meta name="description" content="Rearrange any PDF into booklets, cut-and-stack, N-up and notes layouts for double-sided printing. Runs entirely in your browser.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{
+  --bg:#E9ECEF; --sheet:#FFFFFF; --ink:#18233A; --muted:#566074; --line:#CBD2DB;
+  --accent:#0B6E8A; --accent-soft:#DCEEF3; --mark:#C4185C; --cell:#F3F6F9;
+  --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --display:"Bricolage Grotesque", "Atkinson Hyperlegible", system-ui, sans-serif;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#121722; --sheet:#1B2230; --ink:#E6EAF1; --muted:#9AA4B5; --line:#323C4E;
+    --accent:#5BBAD5; --accent-soft:#1D3440; --mark:#F06292; --cell:#232C3C;
+    color-scheme:dark;
+  }
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 var(--body)}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+header{margin-bottom:28px;max-width:62ch}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(2.2rem,5vw,3.4rem);line-height:1;letter-spacing:-.02em;margin:0 0 12px}
+header p{margin:0;color:var(--muted)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,440px);gap:28px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+section.panel{background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:18px}
+h2{font-family:var(--display);font-weight:600;font-size:1.25rem;margin:0 0 4px}
+.hint{color:var(--muted);font-size:.93rem;margin:0 0 14px}
+.drop{display:block;border:2px dashed var(--line);border-radius:12px;padding:26px 18px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop strong{display:block;font-size:1.05rem}
+.drop input{position:absolute;opacity:0;width:1px;height:1px}
+.drop:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+.fileinfo{margin-top:10px;font-size:.95rem}
+.fileinfo p{margin:0 0 6px}
+.fileinfo .warn{color:var(--mark)}
+.srclist{list-style:none;margin:0 0 8px;padding:0;font-size:.9rem;max-height:220px;overflow-y:auto}
+.srclist li{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--line)}
+.srclist li span:first-child{flex:1 1 50%;min-width:0;overflow-wrap:anywhere}
+.srclist li span:last-child{flex:0 1 auto;color:var(--muted);text-align:right}
+.fileactions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+pre.example{font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;background:var(--cell);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 12px;overflow-x:auto;white-space:pre}
+.small{padding:7px 13px;font-size:.92rem}
+#addLabel{position:relative;overflow:hidden}
+#addLabel input{position:absolute;opacity:0;width:1px;height:1px}
+#addLabel:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+.layouts{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.tile{position:relative;display:block;border:1px solid var(--line);border-radius:10px;padding:11px 13px;cursor:pointer;background:var(--sheet)}
+.tile input{position:absolute;opacity:0}
+.tile b{display:block}
+.tile span{display:block;color:var(--muted);font-size:.86rem;line-height:1.35;margin-top:2px}
+.tile:has(input:checked){border:2px solid var(--accent);padding:10px 12px;background:var(--accent-soft)}
+.tile:has(input:focus-visible){outline:3px solid var(--accent);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-end;margin-bottom:14px}
+.row:last-child{margin-bottom:0}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:.93rem}
+label.c{display:flex;gap:9px;align-items:flex-start;font-size:.97rem;cursor:pointer}
+label.c input[type=checkbox]{margin-top:4px;width:18px;height:18px;flex:none;accent-color:var(--accent)}
+label.c input[type=number]{width:70px;padding:2px 6px;margin:0 4px}
+input[type=text],input[type=number],select{font:inherit;color:var(--ink);background:var(--sheet);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0}
+input[type=number]{width:90px}
+input[type=text]{width:min(300px,100%)}
+input[type=range]{accent-color:var(--accent);width:160px}
+input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.sub{margin-left:27px}
+[hidden]{display:none!important}
+button,.btn{font:inherit;font-weight:700;border-radius:10px;padding:11px 18px;border:2px solid var(--accent);cursor:pointer;text-decoration:none;display:inline-block}
+.primary{background:var(--accent);color:var(--sheet);width:100%;font-size:1.05rem;padding:14px}
+.primary:disabled{opacity:.55;cursor:progress}
+.secondary{background:transparent;color:var(--accent)}
+.side{position:sticky;top:calc(16px + env(safe-area-inset-top,0px))}
+@media (max-width:900px){.side{position:static}}
+.diagram svg{width:100%;height:auto;display:block}
+.diagram .cap{display:flex;justify-content:space-around;color:var(--muted);font-size:.86rem;margin-top:4px}
+.summary{font-size:.95rem;margin:12px 0 0}
+.howto{background:var(--accent-soft);border-radius:10px;padding:12px 14px;font-size:.95rem;margin-top:12px}
+.howto p{margin:0 0 6px}.howto p:last-child{margin:0}
+.status{font-size:.95rem;margin:12px 0 0;min-height:1.4em}
+.status.err{color:var(--mark);font-weight:700}
+.result .btns{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.thumbs{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+.thumbs figure{margin:0}
+.thumbs canvas{width:100%;height:auto;border:1px solid var(--line);border-radius:4px;background:#fff;display:block}
+.thumbs figcaption{font-size:.8rem;color:var(--muted);text-align:center;margin-top:3px}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{text-align:left;padding:6px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:400}
+.tablewrap{overflow-x:auto;max-height:320px;overflow-y:auto}
+footer{color:var(--muted);font-size:.88rem;margin-top:30px;max-width:70ch}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Pustika</h1>
+  <p>Turn PDFs, photos of notes and text files into booklets, pocket books, flash cards, several pages per side, or pages with room for notes, ready for double-sided printing. Everything runs in your browser, so your files never leave your device.</p>
+</header>
+
+<div class="grid">
+<main>
+  <section class="panel">
+    <h2>Your files</h2>
+    <label class="drop" id="drop">
+      <input type="file" id="file" multiple accept="application/pdf,.pdf,image/*,.heic,.heif,.txt,text/plain,.md,.markdown,text/markdown">
+      <strong>Choose files or drop them here</strong>
+      <span class="hint" style="margin:0">PDFs, photos of notes, text and Markdown files. Pick several to combine them in name order.</span>
+    </label>
+    <div class="fileinfo" id="fileinfo" hidden></div>
+    <div class="fileactions" id="fileActions" hidden>
+      <label class="btn secondary small" tabindex="0" id="addLabel">Add more files<input type="file" id="fileAdd" multiple accept="application/pdf,.pdf,image/*,.heic,.heif,.txt,text/plain,.md,.markdown,text/markdown"></label>
+      <button type="button" class="secondary small" id="clear">Start over</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Layout</h2>
+    <p class="hint">Pick how pages land on each sheet. The sheet 1 preview updates as you choose.</p>
+    <div class="layouts" id="layouts"></div>
+  </section>
+
+  <section class="panel" id="cardPanel" hidden>
+    <h2>Flash cards</h2>
+    <div class="row">
+      <label class="f">Cards per sheet
+        <select id="cardsPerSheet">
+          <option value="4">4 large cards</option>
+          <option value="8" selected>8 cards, about 10 × 7 cm</option>
+          <option value="10">10 cards, business card size</option>
+          <option value="12">12 small cards</option>
+        </select>
+      </label>
+      <label class="f" id="cardPairsField">PDF and photo pages
+        <select id="cardPairs">
+          <option value="single">Each page is one card, no back</option>
+          <option value="pairs">Pages pair up: front, then back</option>
+        </select>
+      </label>
+    </div>
+    <p class="hint">Write cards in a .txt or .md file, with an empty line between cards:</p>
+<pre class="example">Q: Where do the light reactions happen?
+A: In the thylakoid membranes.
+
+Mitochondria :: Makes ATP for the cell
+
+Krebs cycle
+---
+Happens in the matrix
+- makes NADH and FADH2
+
+Water splits at photosystem II
+Oxygen is a by-product</pre>
+    <p class="hint"><b>Q:</b> and <b>A:</b> make a question card. <b>keyword :: meaning</b> makes a keyword card. A line of <b>---</b> splits the front from the back. Anything else becomes a note card with no back. Bold, italic and lists work too. Text is sized to fill each card.</p>
+    <a class="btn secondary small" id="sampleCards" download="example-cards.txt">Download this example</a>
+  </section>
+
+  <section class="panel" id="nsPanel" hidden>
+    <h2>Notes sheet</h2>
+    <div class="row">
+      <label class="f">Paper direction
+        <select id="nsOrient">
+          <option value="portrait">Portrait (upright)</option>
+          <option value="landscape">Landscape (sideways)</option>
+        </select>
+      </label>
+      <label class="f">Space for notes
+        <select id="nsPlace">
+          <option value="both">Beside and below</option>
+          <option value="side">Beside the page</option>
+          <option value="below">Below the page</option>
+        </select>
+      </label>
+      <label class="f">Note style
+        <select id="nsStyle">
+          <option value="lines">Lines</option>
+          <option value="dots">Dots, for diagrams</option>
+          <option value="squares">Squares, for maths</option>
+          <option value="blank">Blank</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="f">Page size: <output id="nsSizeOut">65%</output>
+        <input type="range" id="nsSize" min="45" max="85" step="5" value="65">
+      </label>
+      <p class="hint" style="margin:0;flex:1 1 220px">Smaller pages leave more room for notes. Keep dense textbook pages larger.</p>
+    </div>
+    <div class="row">
+      <label class="c"><input type="checkbox" id="nsOuter" checked>
+        <span>Keep notes on the outer edge<br><span class="hint" style="display:block;margin:2px 0 0">Right side on fronts and left side on backs, away from staples or spiral binding.</span></span>
+      </label>
+    </div>
+    <div class="row">
+      <label class="c"><input type="checkbox" id="nsCornell">
+        <span>Add Cornell headings<br><span class="hint" style="display:block;margin:2px 0 0">“Questions” beside the page, for questions you answer later with the page covered, and “Summary” below it, for the main points in your own words.</span></span>
+      </label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 id="pagesTitle">Pages and study sessions</h2>
+    <p class="hint" id="pagesHint">Print a session, study it, then print the next. Short sessions keep each stack small enough to finish.</p>
+    <div class="row">
+      <label class="f"><span id="rangeLabel">Pages to print</span>
+        <input type="text" id="range" placeholder="All pages, or e.g. 1-20, 25, 40-" autocomplete="off">
+      </label>
+    </div>
+    <div class="row" id="splitRow">
+      <label class="c"><input type="checkbox" id="split" checked>
+        <span>Split into sessions of <input type="number" id="sessionSize" min="1" max="400" value="15" aria-label="Pages per session"> pages</span>
+      </label>
+    </div>
+    <div class="row" id="recallRow">
+      <label class="c"><input type="checkbox" id="recall" checked>
+        <span>Add a recall page at the end of each session<br><span class="hint" style="display:block;margin:2px 0 0">A ruled page that asks you to write what you remember before checking, with boxes to tick when you review it again.</span></span>
+      </label>
+    </div>
+  </section>
+
+  <section class="panel" id="convPanel" hidden>
+    <h2>Photos and text files</h2>
+    <div class="row" id="cleanupRow">
+      <label class="c"><input type="checkbox" id="cleanup" checked>
+        <span>Clean up photos: whiten the paper and darken the ink<br><span class="hint" style="display:block;margin:2px 0 0">Removes shadows and grey backgrounds, saves toner, and lets margin trimming work.</span></span>
+      </label>
+    </div>
+    <div class="row" id="textSizeRow">
+      <label class="f">Text size when printed
+        <select id="textSize">
+          <option value="10">10 pt, compact</option>
+          <option value="11" selected>11 pt, like most books</option>
+          <option value="12">12 pt</option>
+          <option value="13">13 pt, easy reading</option>
+          <option value="14">14 pt, large</option>
+        </select>
+      </label>
+      <p class="hint" style="margin:0;flex:1 1 220px">Text files are laid out to fit the chosen layout, so they print at exactly this size.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Margins and paper</h2>
+    <p class="hint" id="bindHint" hidden>For spiral or punch binding, set a binding margin. It adds space on the left of each front and the right of each back, so holes miss the text.</p>
+    <div class="row">
+      <label class="c"><input type="checkbox" id="trim" checked>
+        <span>Trim empty margins so text prints larger</span>
+      </label>
+    </div>
+    <div class="row sub" id="trimOpts">
+      <label class="f">Trim style
+        <select id="trimMode">
+          <option value="uniform">Same size on every page</option>
+          <option value="page">Each page separately (largest text)</option>
+        </select>
+      </label>
+      <label class="f">Breathing room: <output id="padOut">2%</output>
+        <input type="range" id="pad" min="0" max="8" step="1" value="2">
+      </label>
+    </div>
+    <div class="row">
+      <label class="f">Paper
+        <select id="paper"><option value="a4">A4</option><option value="letter">US Letter</option></select>
+      </label>
+      <label class="f">Outer margin (mm)
+        <input type="number" id="margin" min="0" max="25" step="1" value="5">
+      </label>
+      <label class="f" id="gutterField">Fold margin (mm)
+        <input type="number" id="gutter" min="0" max="25" step="1" value="6">
+      </label>
+      <label class="f" id="bindField">Spiral binding margin (mm)
+        <input type="number" id="bind" min="0" max="30" step="1" value="0">
+      </label>
+    </div>
+  </section>
+</main>
+
+<aside class="side">
+  <section class="panel">
+    <h2>Sheet 1</h2>
+    <div class="diagram" id="diagram"></div>
+    <p class="summary" id="summary"></p>
+    <div class="howto" id="howto"></div>
+  </section>
+  <section class="panel">
+    <button class="primary" id="go" disabled>Make PDF</button>
+    <p class="status" id="status" role="status" aria-live="polite">Choose files to begin.</p>
+  </section>
+  <section class="panel result" id="result" hidden>
+    <h2>Ready to print</h2>
+    <div class="btns">
+      <a class="btn primary" id="dl" download style="width:auto">Download PDF</a>
+      <a class="btn secondary" id="open" target="_blank" rel="noopener">Open to print</a>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+    <div class="tablewrap"><table id="sessTable"></table></div>
+  </section>
+</aside>
+</div>
+
+<footer>In the print dialog, keep the paper size the same as above and choose actual size (100%). Pages from the source PDF are copied as-is, so text stays sharp.</footer>
+</div>
+
+<!-- Core: layout planning and PDF building. No DOM access, so it can be tested on its own. -->
+<script id="core">
+const { PDFDocument, StandardFonts, rgb, degrees } = PDFLib;
+const MM = 72 / 25.4;
+const PAPER = { a4: [595.28, 841.89], letter: [612, 792] };
+const RECALL_SIZE = [595.28, 841.89];
+
+const LAYOUTS = {
+  booklet:  { name: 'Booklet', good: 'Fold in half to read like a book. Best for books and long chapters.', kind: 'booklet' },
+  pocket:   { name: 'Pocket book', good: 'Quarter-size book: cut once, fold once. Best for text notes.', kind: 'pocket' },
+  cutstack: { name: 'Cut and stack', good: 'Cut the stack in half for a small ordered pile. No folding.', kind: 'cutstack' },
+  n2:       { name: '2 per side', good: 'Research papers and handwritten notes.', kind: 'nup', n: 2 },
+  n4:       { name: '4 per side', good: 'Lecture slides.', kind: 'nup', n: 4 },
+  n6:       { name: '6 per side', good: 'Slides for quick revision.', kind: 'nup', n: 6 },
+  notes:    { name: 'Page and notes', good: 'One page with ruled space beside or below it.', kind: 'notes' },
+  notesheet:{ name: 'Notes sheet', good: 'Page with space for notes beside it, below it, or both. Portrait or landscape paper.', kind: 'notesheet' },
+  cards:    { name: 'Flash cards', good: 'Question or keyword on the front, answer on the back. Also note cards.', kind: 'cards' },
+  n1:       { name: '1 per side', good: 'Full size, just selected and trimmed.', kind: 'nup', n: 1 },
+};
+
+function parseRange(str, count) {
+  str = (str || '').trim();
+  if (!str) return [...Array(count).keys()];
+  const out = [];
+  for (const part of str.split(',')) {
+    const p = part.trim();
+    if (!p) continue;
+    let a, b;
+    const m = p.match(/^(\d*)\s*-\s*(\d*)$/);
+    if (m && (m[1] || m[2])) { a = m[1] ? +m[1] : 1; b = m[2] ? +m[2] : count; }
+    else if (/^\d+$/.test(p)) { a = b = +p; }
+    else throw new Error(`"${p}" is not a page or range. Use forms like 1-20, 25, 40-.`);
+    if (a < 1 || b > count || a > b) throw new Error(`"${p}" is outside this PDF's pages (1 to ${count}).`);
+    for (let i = a; i <= b; i++) out.push(i - 1);
+  }
+  if (!out.length) throw new Error('No pages selected.');
+  return out;
+}
+
+function makeSessions(indices, o) {
+  const size = o.split ? Math.max(1, Math.floor(o.sessionSize) || 1) : indices.length;
+  const sessions = [];
+  for (let i = 0; i < indices.length; i += size) sessions.push({ pages: indices.slice(i, i + size) });
+  sessions.forEach((s, k) => {
+    s.no = k + 1; s.total = sessions.length;
+    s.from = s.pages[0] + 1; s.to = s.pages[s.pages.length - 1] + 1;
+    s.slots = s.pages.map(i => ({ t: 'src', i }));
+    if (o.recall) s.slots.push({ t: 'recall', s });
+  });
+  return sessions;
+}
+
+function pageInfoFromDoc(doc) {
+  return doc.getPages().map(p => {
+    const c = p.getCropBox();
+    const rot = (((p.getRotation().angle || 0) % 360) + 360) % 360;
+    return { box: { left: c.x, bottom: c.y, right: c.x + c.width, top: c.y + c.height }, rot };
+  });
+}
+
+function boxOf(info, trims, i) { return (trims && trims[i]) || info[i].box; }
+
+function aspectFn(info, trims) {
+  return slot => {
+    if (slot.t === 'src') {
+      const b = boxOf(info, trims, slot.i), w = b.right - b.left, h = b.top - b.bottom;
+      return info[slot.i].rot % 180 ? h / w : w / h;
+    }
+    return RECALL_SIZE[0] / RECALL_SIZE[1];
+  };
+}
+
+// Pads a session so its slot count is a multiple of `mult`. Blanks go before the recall page so it stays last.
+function padTo(slots, mult) {
+  const target = Math.ceil(slots.length / mult) * mult, added = target - slots.length;
+  if (!added) return { slots, added };
+  const blanks = Array.from({ length: added }, () => ({ t: 'blank' }));
+  const last = slots[slots.length - 1];
+  const out = last && last.t === 'recall' ? [...slots.slice(0, -1), ...blanks, last] : [...slots, ...blanks];
+  return { slots: out, added };
+}
+
+function chooseGrid(n, aspect, W, H, m, g) {
+  let best = null;
+  for (const [sw, sh] of [[Math.min(W, H), Math.max(W, H)], [Math.max(W, H), Math.min(W, H)]]) {
+    for (let cols = 1; cols <= n; cols++) {
+      if (n % cols) continue;
+      const rows = n / cols;
+      const cw = (sw - 2 * m - (cols - 1) * g) / cols, ch = (sh - 2 * m - (rows - 1) * g) / rows;
+      const s = Math.min(cw / aspect, ch);
+      if (!best || s > best.s * 1.001) best = { s, sw, sh, cols, rows, cw, ch, g };
+    }
+  }
+  return best;
+}
+
+function gridCells(G, m) {
+  const cells = [];
+  for (let r = 0; r < G.rows; r++)
+    for (let c = 0; c < G.cols; c++)
+      cells.push({ x: m + c * (G.cw + G.g), y: G.sh - m - (r + 1) * G.ch - r * G.g, w: G.cw, h: G.ch, r, c });
+  return cells;
+}
+
+function centerMarks(sw, sh, dir) {
+  const len = 7 * MM;
+  return dir === 'v'
+    ? [{ x1: sw / 2, y1: sh, x2: sw / 2, y2: sh - len }, { x1: sw / 2, y1: 0, x2: sw / 2, y2: len }]
+    : [{ x1: 0, y1: sh / 2, x2: len, y2: sh / 2 }, { x1: sw, y1: sh / 2, x2: sw - len, y2: sh / 2 }];
+}
+
+function planLayout(sessions, o, aspectOf) {
+  const L = LAYOUTS[o.layout];
+  const [pw, ph] = PAPER[o.paper];
+  const PW = Math.min(pw, ph), PH = Math.max(pw, ph);
+  const m = o.margin * MM;
+  const aspects = sessions.flatMap(s => s.slots.filter(x => x.t === 'src').map(aspectOf)).sort((a, b) => a - b);
+  const med = aspects.length ? aspects[Math.floor(aspects.length / 2)] : PW / PH;
+  const pages = [], sessOut = [];
+  const blankSide = (w, h) => ({ w, h, cells: [] });
+
+  for (const s of sessions) {
+    const start = pages.length;
+    let blanks = 0;
+
+    if (L.kind === 'booklet') {
+      const pad = padTo(s.slots, 4); const slots = pad.slots; blanks = pad.added;
+      const P = slots.length, sw = PH, sh = PW, gi = o.gutter * MM;
+      const cw = (sw - 2 * m - 2 * gi) / 2, ch = sh - 2 * m;
+      const Lc = { x: m, y: m, w: cw, h: ch }, Rc = { x: sw / 2 + gi, y: m, w: cw, h: ch };
+      const marks = centerMarks(sw, sh, 'v');
+      for (let k = 0; k < P / 4; k++) {
+        pages.push({ w: sw, h: sh, marks, cells: [{ ...Lc, slot: slots[P - 1 - 2 * k] }, { ...Rc, slot: slots[2 * k] }] });
+        pages.push({ w: sw, h: sh, marks, cells: [{ ...Lc, slot: slots[2 * k + 1] }, { ...Rc, slot: slots[P - 2 - 2 * k] }] });
+      }
+    } else if (L.kind === 'pocket') {
+      // Four quarter pages per side. Cut across the middle, put the bottom pile under the top pile, fold in half.
+      const pad = padTo(s.slots, 8); const slots = pad.slots; blanks = pad.added;
+      const P = slots.length, Sh = P / 8, sw = PW, sh = PH, hh = sh / 2, gi = o.gutter * MM;
+      const cw = (sw - 2 * m - 2 * gi) / 2, ch = hh - 2 * m;
+      const at = (top, right) => ({ x: right ? sw / 2 + gi : m, y: top ? hh + m : m, w: cw, h: ch });
+      const len = 7 * MM;
+      const marks = [...centerMarks(sw, sh, 'h'),
+        { x1: sw / 2, y1: sh, x2: sw / 2, y2: sh - len }, { x1: sw / 2, y1: 0, x2: sw / 2, y2: len },
+        { x1: sw / 2, y1: hh + len, x2: sw / 2, y2: hh + 2 }, { x1: sw / 2, y1: hh - len, x2: sw / 2, y2: hh - 2 }];
+      for (let i = 0; i < Sh; i++) {
+        const vt = i, vb = Sh + i;
+        pages.push({ w: sw, h: sh, marks, cells: [
+          { ...at(true, false), slot: slots[P - 1 - 2 * vt] }, { ...at(true, true), slot: slots[2 * vt] },
+          { ...at(false, false), slot: slots[P - 1 - 2 * vb] }, { ...at(false, true), slot: slots[2 * vb] }] });
+        pages.push({ w: sw, h: sh, marks, cells: [
+          { ...at(true, false), slot: slots[2 * vt + 1] }, { ...at(true, true), slot: slots[P - 2 - 2 * vt] },
+          { ...at(false, false), slot: slots[2 * vb + 1] }, { ...at(false, true), slot: slots[P - 2 - 2 * vb] }] });
+      }
+    } else if (L.kind === 'cutstack') {
+      const G = chooseGrid(2, med, PW, PH, m, 2 * m), cells = gridCells(G, m);
+      const pad = padTo(s.slots, 4); const slots = pad.slots; blanks = pad.added;
+      const S = slots.length / 4;
+      const marks = centerMarks(G.sw, G.sh, G.cols === 2 ? 'v' : 'h');
+      for (let i = 0; i < S; i++) {
+        const f = [2 * i, 2 * S + 2 * i];
+        pages.push({ w: G.sw, h: G.sh, marks, cells: cells.map((c, j) => ({ ...c, slot: slots[f[j]] })) });
+        // Flipping the sheet sideways mirrors columns, so the back of column c sits at column (cols-1-c).
+        pages.push({ w: G.sw, h: G.sh, marks, cells: cells.map(c => ({ ...c, slot: slots[f[c.r * G.cols + (G.cols - 1 - c.c)] + 1] })) });
+      }
+    } else if (L.kind === 'nup') {
+      const n = L.n, sides = [];
+      if (n === 1) {
+        for (const slot of s.slots) {
+          const land = aspectOf(slot) > 1, w = land ? PH : PW, h = land ? PW : PH;
+          sides.push({ w, h, cells: [{ x: m, y: m, w: w - 2 * m, h: h - 2 * m, slot }] });
+        }
+      } else {
+        const G = chooseGrid(n, med, PW, PH, m, 4 * MM), cells = gridCells(G, m);
+        let cur = [];
+        const flush = () => {
+          if (!cur.length) return;
+          sides.push({ w: G.sw, h: G.sh, cells: cells.map((c, j) => ({ ...c, slot: cur[j] || { t: 'blank' } })) });
+          cur = [];
+        };
+        for (const slot of s.slots) {
+          if (slot.t === 'recall' && n >= 4) {
+            flush();
+            sides.push({ w: PW, h: PH, cells: [{ x: m, y: m, w: PW - 2 * m, h: PH - 2 * m, slot }] });
+          } else { cur.push(slot); if (cur.length === n) flush(); }
+        }
+        flush();
+      }
+      if (sides.length % 2) sides.push(blankSide(sides[sides.length - 1].w, sides[sides.length - 1].h));
+      pages.push(...sides);
+    } else if (L.kind === 'notesheet') {
+      const land = o.nsOrient === 'landscape', W = land ? PH : PW, H = land ? PW : PH;
+      const aw = W - 2 * m, ah = H - 2 * m, gap = 5 * MM, minArea = 15 * MM;
+      const f = Math.min(0.9, Math.max(0.4, (o.nsSize || 65) / 100));
+      const place = o.nsPlace || 'both', style = o.nsStyle || 'lines', labels = !!o.nsCornell;
+      const sides = [];
+      for (const slot of s.slots) {
+        if (slot.t === 'recall') { sides.push({ w: W, h: H, cells: [{ x: m, y: m, w: aw, h: ah, slot }] }); continue; }
+        const a = aspectOf(slot);
+        const bw = place === 'below' ? aw : aw * f, bh = place === 'side' ? ah : ah * f;
+        let w = bw, h = w / a;
+        if (h > bh) { h = bh; w = h * a; }
+        const notes = [];
+        if (place !== 'below') {
+          const x = m + w + gap;
+          if (W - m - x > minArea) notes.push({ x, y: m, w: W - m - x, h: ah, style, label: labels ? 'Questions' : null });
+        }
+        if (place !== 'side') {
+          const top = H - m - h - gap;
+          if (top - m > minArea) notes.push({ x: m, y: m, w: place === 'below' ? aw : w, h: top - m, style, label: labels ? 'Summary' : null });
+        }
+        sides.push({ w: W, h: H, notes, cells: [{ x: m, y: H - m - h, w, h, slot, align: 'topleft' }] });
+      }
+      if (sides.length % 2) sides.push(blankSide(W, H));
+      // Backs are mirrored so the notes stay on the outer edge, away from staples or binding.
+      if (o.nsOuter !== false) sides.forEach((sd, k) => {
+        if (k % 2) for (const b of [...sd.cells, ...(sd.notes || [])]) { b.x = sd.w - b.x - b.w; if (b.align === 'topleft') b.align = 'topright'; }
+      });
+      pages.push(...sides);
+    } else if (L.kind === 'notes') {
+      const sides = [], aw = PW - 2 * m, ah = PH - 2 * m, gap = 5 * MM;
+      for (const slot of s.slots) {
+        if (slot.t === 'recall') { sides.push({ w: PW, h: PH, cells: [{ x: m, y: m, w: aw, h: ah, slot }] }); continue; }
+        const a = aspectOf(slot);
+        let w, h, notes;
+        if (a <= 1) {
+          h = ah; w = h * a;
+          if (w > aw * 0.72) { w = aw * 0.72; h = w / a; }
+          notes = [{ x: m + w + gap, y: m, w: aw - w - gap, h: ah }, { x: m, y: m, w, h: ah - h - gap }];
+        } else {
+          w = aw; h = w / a;
+          if (h > ah * 0.6) { h = ah * 0.6; w = h * a; }
+          notes = [{ x: m, y: m, w: aw, h: ah - h - gap }];
+        }
+        sides.push({ w: PW, h: PH, notes, cells: [{ x: m, y: PH - m - h, w, h, slot, align: 'topleft' }] });
+      }
+      if (sides.length % 2) sides.push(blankSide(PW, PH));
+      pages.push(...sides);
+    }
+    sessOut.push({ no: s.no, from: s.from, to: s.to, count: s.pages.length, start: start + 1, end: pages.length, sheets: (pages.length - start) / 2, blanks });
+  }
+  const bind = (o.bind || 0) * MM;
+  if (bind > 0 && (L.kind === 'nup' || L.kind === 'notes' || L.kind === 'notesheet' || L.kind === 'cutstack')) applyBinding(pages, bind, L.kind === 'cutstack');
+  return { pages, sessions: sessOut, layout: L, sheets: pages.length / 2 };
+}
+
+// Extra space on the bound edge for spiral or punch binding: the left edge on fronts, the right edge on backs.
+function applyBinding(pages, b, perCell) {
+  pages.forEach((pg, idx) => {
+    const front = idx % 2 === 0, boxes = [...pg.cells, ...(pg.notes || [])];
+    if (!boxes.length) return;
+    const minX = Math.min(...boxes.map(c => c.x)), maxR = Math.max(...boxes.map(c => c.x + c.w));
+    for (const c of boxes) {
+      if (front && (perCell || c.x <= minX + 0.5)) { c.x += b; c.w = Math.max(10, c.w - b); }
+      else if (!front && (perCell || c.x + c.w >= maxR - 0.5)) c.w = Math.max(10, c.w - b);
+    }
+  });
+}
+
+function wrapText(text, font, size, maxW) {
+  const lines = []; let line = '';
+  for (const w of text.split(' ')) {
+    const t = line ? line + ' ' + w : w;
+    if (line && font.widthOfTextAtSize(t, size) > maxW) { lines.push(line); line = w; } else line = t;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function drawRecall(page, f, fb, s) {
+  const [W, H] = RECALL_SIZE, M = 54;
+  const ink = rgb(0.09, 0.14, 0.23), grey = rgb(0.42, 0.46, 0.53), rule = rgb(0.78, 0.81, 0.85);
+  let y = H - M - 22;
+  page.drawText(s.total > 1 ? `Session ${s.no} of ${s.total}` : 'Recall', { x: M, y, size: 26, font: fb, color: ink });
+  y -= 24;
+  const span = s.from === s.to ? `page ${s.from}` : `pages ${s.from} to ${s.to}`;
+  page.drawText(`Recall page for ${span}`, { x: M, y, size: 12, font: f, color: grey });
+  y -= 30;
+  const prompt = 'Close the pages. From memory, write the main ideas, definitions, steps and diagrams. Then open the pages, check, and fill the gaps in a different colour.';
+  for (const line of wrapText(prompt, f, 13, W - 2 * M)) { page.drawText(line, { x: M, y, size: 13, font: f, color: ink }); y -= 18; }
+  y -= 18;
+  const footerTop = M + 104;
+  for (let ly = y; ly > footerTop; ly -= 27) page.drawLine({ start: { x: M, y: ly }, end: { x: W - M, y: ly }, thickness: 0.6, color: rule });
+  page.drawText('Review this session again', { x: M, y: M + 76, size: 13, font: fb, color: ink });
+  const labels = ['Tomorrow', 'In 3 days', 'In 1 week', 'In 1 month'], colW = (W - 2 * M) / 4;
+  labels.forEach((l, k) => {
+    const x = M + k * colW;
+    page.drawRectangle({ x, y: M + 38, width: 14, height: 14, borderColor: ink, borderWidth: 1 });
+    page.drawText(l, { x: x + 21, y: M + 41, size: 11, font: f, color: ink });
+    page.drawLine({ start: { x, y: M + 14 }, end: { x: x + colW - 16, y: M + 14 }, thickness: 0.6, color: rule });
+    page.drawText('date', { x, y: M + 2, size: 8, font: f, color: grey });
+  });
+}
+
+function drawEmbedded(page, emb, rot, box, align) {
+  const ew = emb.width, eh = emb.height;
+  const dw = rot % 180 ? eh : ew, dh = rot % 180 ? ew : eh;
+  const s = Math.min(box.w / dw, box.h / dh), W = dw * s, H = dh * s;
+  let X = box.x + (box.w - W) / 2, Y = box.y + (box.h - H) / 2;
+  if (align === 'topleft') { X = box.x; Y = box.y + box.h - H; }
+  else if (align === 'topright') { X = box.x + box.w - W; Y = box.y + box.h - H; }
+  // Content is drawn rotated clockwise by `rot` around (x, y), so shift the origin to keep it in the box.
+  let x = X, y = Y;
+  if (rot === 90) y = Y + H;
+  else if (rot === 180) { x = X + W; y = Y + H; }
+  else if (rot === 270) x = X + W;
+  page.drawPage(emb, { x, y, xScale: s, yScale: s, rotate: degrees(-rot) });
+}
+
+async function renderPdf(srcDoc, info, trims, plan, sessions, onProgress) {
+  const out = await PDFDocument.create();
+  out.setTitle('Pustika print layout');
+  out.setProducer('Pustika');
+  const used = [...new Set(sessions.flatMap(s => s.pages))];
+  const emb = {};
+  for (let k = 0; k < used.length; k++) {
+    const i = used[k];
+    emb[i] = await out.embedPage(srcDoc.getPage(i), boxOf(info, trims, i));
+    if (onProgress && k % 20 === 0) await onProgress(`Copying pages ${k + 1} of ${used.length}`);
+  }
+  const recallEmb = new Map();
+  const recallSessions = sessions.filter(s => s.slots.some(x => x.t === 'recall'));
+  if (recallSessions.length) {
+    const rdoc = await PDFDocument.create();
+    const f = await rdoc.embedFont(StandardFonts.Helvetica), fb = await rdoc.embedFont(StandardFonts.HelveticaBold);
+    for (const s of recallSessions) drawRecall(rdoc.addPage(RECALL_SIZE), f, fb, s);
+    // Fonts are only written out on save, so round-trip the recall pages before embedding them.
+    const rdocSaved = await PDFDocument.load(await rdoc.save());
+    const embs = await out.embedPages(rdocSaved.getPages());
+    recallSessions.forEach((s, k) => recallEmb.set(s, embs[k]));
+  }
+  const markColor = rgb(0.55, 0.58, 0.63), ruleColor = rgb(0.8, 0.82, 0.86);
+  const labelFont = plan.pages.some(pg => (pg.notes || []).some(n => n.label)) ? await out.embedFont(StandardFonts.HelveticaBold) : null;
+  for (const pg of plan.pages) {
+    const page = out.addPage([pg.w, pg.h]);
+    for (const c of pg.cells) {
+      if (c.slot.t === 'src') drawEmbedded(page, emb[c.slot.i], info[c.slot.i].rot, c, c.align);
+      else if (c.slot.t === 'recall') drawEmbedded(page, recallEmb.get(c.slot.s), 0, c, c.align);
+    }
+    for (const mk of pg.marks || []) page.drawLine({ start: { x: mk.x1, y: mk.y1 }, end: { x: mk.x2, y: mk.y2 }, thickness: 0.6, color: markColor });
+    for (const n of pg.notes || []) {
+      if (n.w < 20 || n.h < 20) continue;
+      if (n.style) { drawNoteArea(page, n, labelFont); continue; }
+      for (let y = n.y + n.h - 2; y > n.y; y -= 7 * MM) page.drawLine({ start: { x: n.x, y }, end: { x: n.x + n.w, y }, thickness: 0.5, color: ruleColor });
+    }
+  }
+  return out.save();
+}
+
+// Fills a notes area with lines, dots or squares, with an optional small heading.
+function drawNoteArea(page, n, labelFont) {
+  let top = n.y + n.h;
+  if (n.label && labelFont) {
+    page.drawText(n.label, { x: n.x + 1, y: top - 8, size: 8, font: labelFont, color: rgb(0.42, 0.46, 0.53) });
+    top -= 13;
+  }
+  const light = rgb(0.8, 0.82, 0.86), lighter = rgb(0.86, 0.88, 0.91), dot = rgb(0.6, 0.63, 0.68);
+  const right = n.x + n.w;
+  if (n.style === 'lines') {
+    for (let y = top - 7 * MM; y > n.y; y -= 7 * MM) page.drawLine({ start: { x: n.x, y }, end: { x: right, y }, thickness: 0.5, color: light });
+  } else if (n.style === 'squares') {
+    const st = 5 * MM, rows = Math.floor((top - n.y) / st), cols = Math.floor(n.w / st);
+    const bottom = top - rows * st, r2 = n.x + cols * st;
+    for (let i = 0; i <= rows; i++) { const y = top - i * st; page.drawLine({ start: { x: n.x, y }, end: { x: r2, y }, thickness: 0.4, color: lighter }); }
+    for (let j = 0; j <= cols; j++) { const x = n.x + j * st; page.drawLine({ start: { x, y: bottom }, end: { x, y: top }, thickness: 0.4, color: lighter }); }
+  } else if (n.style === 'dots') {
+    const st = 5 * MM;
+    for (let y = top - st; y > n.y; y -= st) for (let x = n.x + st / 2; x < right; x += st) page.drawRectangle({ x: x - 0.45, y: y - 0.45, width: 0.9, height: 0.9, color: dot });
+  }
+}
+
+function printAdvice(plan) {
+  const L = plan.layout, p0 = plan.pages[0] || { w: 2, h: 1 };
+  const land = p0.w > p0.h;
+  const flip = land ? 'flip on short edge' : 'flip on long edge';
+  if (L.kind === 'cards') return plan.singleSided
+    ? ['Print <b>single-sided</b>: none of these cards has a back.', 'Cut along the lines.']
+    : ['Print double-sided with <b>flip on long edge</b>.', 'Cut along the lines on the front side. Print one sheet first and hold it up to a light to check the backs line up.'];
+  const lines = [`Print double-sided with <b>${flip}</b>.`];
+  if (L.kind === 'pocket') lines.push('Cut the stack across the middle mark. Put the bottom pile under the top pile, fold the whole pile in half along the marks, and staple at the fold.');
+  else if (L.kind === 'booklet') lines.push('Keep each session\'s sheets together, fold them in half along the marks, and staple at the fold.');
+  else if (L.kind === 'cutstack') lines.push(land
+    ? 'Cut the stack in half at the marks. Put the right-hand pile under the left-hand pile.'
+    : 'Cut the stack in half at the marks. Put the bottom pile under the top pile.');
+  else if (L.kind === 'nup' && L.n === 1) lines.push('Landscape pages, if any, are turned automatically by most printers.');
+  if (plan.sessions.length > 1) lines.push('Each session starts on a fresh sheet, so you can print one session at a time using the page numbers in the table.');
+  return lines;
+}
+
+// ---------- Text and Markdown typesetting (pure: measuring and drawing are passed in) ----------
+
+function cleanTextInput(text) {
+  return text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').replace(/\t/g, '    ').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+}
+
+function parseInline(s) {
+  // Hide escaped characters (like \*) from the style patterns, then restore them.
+  s = s.replace(/\\([\\`*_{}\[\]()#+\-.!|>])/g, (m, c) => String.fromCharCode(0xE000 + c.charCodeAt(0)));
+  s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '[$1]').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/<br\s*\/?>/gi, ' ');
+  const runs = [], re = /(`+)(.+?)\1|\*\*(.+?)\*\*|__(.+?)__|\*(?!\s)(.+?)\*/g;
+  let last = 0, m;
+  while ((m = re.exec(s))) {
+    if (m.index > last) runs.push({ t: s.slice(last, m.index), f: 'r' });
+    if (m[2] !== undefined) runs.push({ t: m[2], f: 'm' });
+    else if (m[3] !== undefined || m[4] !== undefined) runs.push({ t: m[3] !== undefined ? m[3] : m[4], f: 'b' });
+    else runs.push({ t: m[5], f: 'i' });
+    last = re.lastIndex;
+  }
+  if (last < s.length) runs.push({ t: s.slice(last), f: 'r' });
+  for (const r of runs) r.t = r.t.replace(/[\uE000-\uE07F]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xE000));
+  return runs.filter(r => r.t.length);
+}
+
+function parseMarkdown(text) {
+  const lines = cleanTextInput(text).split('\n'), blocks = [];
+  let para = null, i = 0;
+  const flush = () => { if (para) { blocks.push(para); para = null; } };
+  while (i < lines.length) {
+    const line = lines[i];
+    let m;
+    if ((m = line.match(/^\s*(```|~~~)/))) {
+      flush();
+      const fence = m[1], code = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith(fence)) { code.push(lines[i]); i++; }
+      i++;
+      blocks.push({ type: 'code', lines: code });
+      continue;
+    }
+    if (!line.trim()) { flush(); i++; continue; }
+    if (/^ {0,3}([-*_])( *\1){2,} *$/.test(line)) { flush(); blocks.push({ type: 'hr' }); i++; continue; }
+    if ((m = line.match(/^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$/))) { flush(); blocks.push({ type: 'h', level: m[1].length, text: m[2] }); i++; continue; }
+    if (/^\s*\|/.test(line)) {
+      flush();
+      const rows = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) {
+        if (!/^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i])) rows.push(lines[i].trim());
+        i++;
+      }
+      blocks.push({ type: 'code', lines: rows });
+      continue;
+    }
+    if ((m = line.match(/^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/))) {
+      flush();
+      const level = Math.min(3, Math.floor(m[1].length / 2));
+      para = { type: 'li', level, marker: /\d/.test(m[2]) ? m[2].replace(')', '.') : '•', text: m[3] };
+      i++; continue;
+    }
+    if ((m = line.match(/^\s*>\s?(.*)$/))) {
+      if (para && para.type === 'quote') para.text += ' ' + m[1];
+      else { flush(); para = { type: 'quote', text: m[1] }; }
+      i++; continue;
+    }
+    if (para) para.text += ' ' + line.trim();
+    else para = { type: 'p', text: line.trim() };
+    i++;
+  }
+  flush();
+  for (const b of blocks) if (b.text !== undefined) { b.runs = parseInline(b.text); delete b.text; }
+  return blocks.filter(b => b.type === 'hr' || b.type === 'code' ? (b.type === 'hr' || b.lines.length) : b.runs.length);
+}
+
+// Plain text keeps its own line breaks; blank lines become vertical space.
+function parsePlainText(text) {
+  const blocks = [];
+  for (const line of cleanTextInput(text).split('\n')) {
+    if (!line.trim()) blocks.push({ type: 'space' });
+    else {
+      const lead = line.match(/^ */)[0].length;
+      blocks.push({ type: 'line', indentChars: Math.min(lead, 40), runs: [{ t: line.trim(), f: 'r' }] });
+    }
+  }
+  while (blocks.length && blocks[blocks.length - 1].type === 'space') blocks.pop();
+  while (blocks.length && blocks[0].type === 'space') blocks.shift();
+  return blocks;
+}
+
+function blockText(blocks) {
+  return blocks.map(b => b.lines ? b.lines.join(' ') : b.runs ? b.runs.map(r => r.t).join(' ') : '').join(' ') + ' •1234567890.';
+}
+
+const INK = [0.08, 0.1, 0.15], GREY = [0.38, 0.41, 0.47];
+
+function blockStyle(b, fs) {
+  const p = { size: fs, lh: fs * 1.42, before: 0, after: fs * 0.55, indent: 0, color: INK };
+  switch (b.type) {
+    case 'h': {
+      const k = [1.55, 1.3, 1.14, 1.04, 1, 1][b.level - 1];
+      return { ...p, size: fs * k, lh: fs * k * 1.25, before: fs * 1.05, after: fs * 0.4, bold: true };
+    }
+    case 'li': return { ...p, indent: fs * 1.3 * (b.level + 1), after: fs * 0.2 };
+    case 'quote': return { ...p, indent: fs * 1.1, color: GREY };
+    case 'code': return { ...p, size: fs * 0.86, lh: fs * 0.86 * 1.32, before: fs * 0.1, after: fs * 0.6, mono: true };
+    case 'line': return { ...p, after: 0 };
+    case 'space': return { ...p, lh: fs * 1.42 * 0.8 };
+    case 'hr': return { ...p, before: fs * 0.5, after: fs * 0.7 };
+  }
+  return p;
+}
+
+function wordsFromRuns(runs) {
+  const words = []; let cur = [];
+  for (const r of runs) {
+    for (const part of r.t.split(/(\s+)/)) {
+      if (!part) continue;
+      if (/^\s+$/.test(part)) { if (cur.length) { words.push(cur); cur = []; } }
+      else cur.push({ t: part, f: r.f });
+    }
+  }
+  if (cur.length) words.push(cur);
+  return words;
+}
+
+// Greedy line breaking over styled words. Returns lines of merged pieces: [{t, f, w}].
+function breakLines(runs, maxW, size, measure, bold) {
+  const fontOf = f => bold && f !== 'm' ? 'b' : f;
+  const lines = []; let line = [], lw = 0;
+  const push = () => { if (line.length) lines.push(line); line = []; lw = 0; };
+  const addPiece = (t, f, w) => {
+    const last = line[line.length - 1];
+    if (last && last.f === f) { last.t += t; last.w += w; } else line.push({ t, f, w });
+    lw += w;
+  };
+  for (const word of wordsFromRuns(runs)) {
+    const pieces = word.map(p => ({ t: p.t, f: fontOf(p.f) }));
+    pieces.forEach(p => { p.w = measure(p.t, p.f, size); });
+    const ww = pieces.reduce((a, p) => a + p.w, 0);
+    const sp = line.length ? measure(' ', line[line.length - 1].f, size) : 0;
+    if (line.length && lw + sp + ww > maxW) push();
+    if (ww > maxW) {
+      // A single word wider than the line: break it by characters.
+      for (const p of pieces) {
+        let chunk = '';
+        for (const ch of Array.from(p.t)) {
+          const cw = measure(chunk + ch, p.f, size);
+          if (lw + cw > maxW && (chunk || line.length)) {
+            if (chunk) addPiece(chunk, p.f, measure(chunk, p.f, size));
+            push(); chunk = ch;
+          } else chunk += ch;
+        }
+        if (chunk) addPiece(chunk, p.f, measure(chunk, p.f, size));
+      }
+      continue;
+    }
+    if (line.length) addPiece(' ', line[line.length - 1].f, sp);
+    for (const p of pieces) addPiece(p.t, p.f, p.w);
+  }
+  push();
+  return lines;
+}
+
+function breakCode(lines, maxW, size, measure) {
+  const cw = Math.max(0.1, measure('M', 'm', size)), per = Math.max(8, Math.floor(maxW / cw)), out = [];
+  for (const l of lines) {
+    const chars = Array.from(l.replace(/\s+$/, ''));
+    if (!chars.length) { out.push([]); continue; }
+    for (let i = 0; i < chars.length; i += per) {
+      const t = chars.slice(i, i + per).join('');
+      out.push([{ t, f: 'm', w: measure(t, 'm', size) }]);
+    }
+  }
+  return out;
+}
+
+// Lays blocks out on pages of size P = {w, h, padX, padTop, padBottom}. Returns arrays of drawing items.
+function layoutText(blocks, P, fs, measure) {
+  const pages = []; let items = [], y = P.padTop;
+  const left = P.padX, right = P.w - P.padX, maxY = P.h - P.padBottom;
+  const atTop = () => y <= P.padTop + 0.01;
+  const newPage = () => { pages.push(items); items = []; y = P.padTop; };
+  for (let bi = 0; bi < blocks.length; bi++) {
+    const b = blocks[bi], st = blockStyle(b, fs);
+    if (b.type === 'space') { if (!atTop()) { y += st.lh; if (y > maxY) newPage(); } continue; }
+    if (b.type === 'hr') {
+      if (y + st.before + st.after > maxY) newPage();
+      if (!atTop()) y += st.before;
+      items.push({ k: 'line', x1: left, y1: y, x2: right, y2: y, w: 0.6, c: GREY });
+      y += st.after; continue;
+    }
+    let indent = st.indent;
+    if (b.type === 'line' && b.indentChars) indent = measure(' '.repeat(b.indentChars), 'r', st.size);
+    const maxW = Math.max(20, right - left - indent);
+    const lines = b.type === 'code' ? breakCode(b.lines, maxW, st.size, measure) : breakLines(b.runs, maxW, st.size, measure, st.bold);
+    if (!atTop()) y += st.before;
+    if (b.type === 'h') {
+      const nextLh = fs * 1.42;
+      if (!atTop() && y + st.lh * lines.length + nextLh * 2 > maxY) newPage();
+    }
+    lines.forEach((line, li) => {
+      if (y + st.lh > maxY + 0.01) newPage();
+      const base = y + st.lh * 0.5 + st.size * 0.33;
+      if (li === 0 && b.type === 'li') {
+        const mw = measure(b.marker, 'r', st.size);
+        items.push({ k: 'text', x: left + indent - mw - st.size * 0.45, y: base, t: b.marker, f: 'r', s: st.size, c: st.color, w: mw });
+      }
+      let x = left + indent;
+      for (const p of line) {
+        if (p.t.trim()) items.push({ k: 'text', x, y: base, t: p.t, f: p.f, s: st.size, c: st.color, w: p.w });
+        x += p.w;
+      }
+      if (b.type === 'quote') items.push({ k: 'line', x1: left + 1.5, y1: y, x2: left + 1.5, y2: y + st.lh, w: 1.6, c: GREY });
+      y += st.lh;
+    });
+    y += st.after;
+    if (y > maxY) newPage();
+  }
+  if (items.length || !pages.length) pages.push(items);
+  while (pages.length > 1 && !pages[pages.length - 1].length) pages.pop();
+  return pages;
+}
+
+// Size of one page slot in the chosen layout, so text pages print at exactly the chosen point size.
+function textCell(o) {
+  if (o.layout === 'cards') return cardCell(o);
+  const [pw, ph] = PAPER[o.paper], a = Math.min(pw, ph) / Math.max(pw, ph);
+  const fake = [{ pages: [0, 1, 2, 3], slots: [0, 1, 2, 3].map(i => ({ t: 'src', i })), no: 1, total: 1, from: 1, to: 4 }];
+  const plan = planLayout(fake, { ...o, recall: false }, () => a);
+  const c = plan.pages[0].cells.find(c => c.slot && c.slot.t === 'src');
+  return { w: c.w, h: c.h };
+}
+
+function textPageBox(cell) {
+  return { w: cell.w, h: cell.h, padX: 4 * MM, padTop: 4 * MM, padBottom: 9 * MM };
+}
+
+async function standardTextFonts(doc) {
+  return {
+    r: await doc.embedFont(StandardFonts.TimesRoman), b: await doc.embedFont(StandardFonts.TimesRomanBold),
+    i: await doc.embedFont(StandardFonts.TimesRomanItalic), m: await doc.embedFont(StandardFonts.Courier),
+  };
+}
+
+function canUseStandardFonts(fonts, blocks) {
+  try { const t = blockText(blocks); fonts.r.encodeText(t); fonts.m.encodeText(t); return true; } catch (e) { return false; }
+}
+
+// Vector text pages, used whenever every character fits the built-in PDF fonts.
+function drawTextPagesVector(doc, fonts, blocks, cell, fs) {
+  const P = textPageBox(cell), measure = (t, f, s) => fonts[f].widthOfTextAtSize(t, s);
+  const pages = layoutText(blocks, P, fs, measure);
+  pages.forEach((items, n) => {
+    const page = doc.addPage([P.w, P.h]);
+    for (const it of items) {
+      if (it.k === 'text') page.drawText(it.t, { x: it.x, y: P.h - it.y, size: it.s, font: fonts[it.f], color: rgb(...it.c) });
+      else page.drawLine({ start: { x: it.x1, y: P.h - it.y1 }, end: { x: it.x2, y: P.h - it.y2 }, thickness: it.w, color: rgb(...it.c) });
+    }
+    const label = String(n + 1), sz = fs * 0.75;
+    page.drawText(label, { x: (P.w - fonts.r.widthOfTextAtSize(label, sz)) / 2, y: P.padBottom * 0.42, size: sz, font: fonts.r, color: rgb(...GREY) });
+  });
+  return pages.length;
+}
+
+// ---------- Flash cards ----------
+
+const CARD_GRIDS = { 4: [2, 2], 8: [2, 4], 10: [2, 5], 12: [3, 4] };
+
+function cardGrid(o) {
+  const [pw, ph] = PAPER[o.paper], PW = Math.min(pw, ph), PH = Math.max(pw, ph), m = o.margin * MM;
+  const [cols, rows] = CARD_GRIDS[o.cardsPerSheet] || CARD_GRIDS[8];
+  const cw = (PW - 2 * m) / cols, ch = (PH - 2 * m) / rows, cells = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push({ x: m + c * cw, y: PH - m - (r + 1) * ch, w: cw, h: ch, r, c });
+  return { PW, PH, m, cols, rows, cw, ch, cells };
+}
+
+function cardCell(o) { const G = cardGrid(o); return { w: G.cw, h: G.ch }; }
+
+// cards: [{ f: pageIndex, b: pageIndex or null, no }]. Backs sit behind their fronts when flipped on the long edge.
+function planCards(cards, o) {
+  const G = cardGrid(o), n = G.cols * G.rows, twoSided = cards.some(c => c.b != null);
+  const grid = [];
+  for (let c = 0; c <= G.cols; c++) { const x = G.m + c * G.cw; grid.push({ x1: x, y1: G.m, x2: x, y2: G.PH - G.m }); }
+  for (let r = 0; r <= G.rows; r++) { const y = G.m + r * G.ch; grid.push({ x1: G.m, y1: y, x2: G.PW - G.m, y2: y }); }
+  const pages = [];
+  for (let i = 0; i < cards.length; i += n) {
+    const group = cards.slice(i, i + n);
+    pages.push({ w: G.PW, h: G.PH, marks: grid, cells: G.cells.map((c, j) => ({ ...c, slot: group[j] ? { t: 'src', i: group[j].f, label: String(group[j].no) } : { t: 'blank' } })) });
+    if (twoSided) pages.push({ w: G.PW, h: G.PH, marks: [], cells: G.cells.map(c => {
+      const card = group[c.r * G.cols + (G.cols - 1 - c.c)];
+      return { ...c, slot: card && card.b != null ? { t: 'src', i: card.b, label: String(card.no) } : { t: 'blank' } };
+    }) });
+  }
+  const sheets = twoSided ? pages.length / 2 : pages.length;
+  const sessions = [{ no: 1, from: cards.length ? cards[0].no : 0, to: cards.length ? cards[cards.length - 1].no : 0, count: cards.length, start: 1, end: pages.length, sheets, blanks: 0 }];
+  return { pages, sessions, layout: LAYOUTS.cards, sheets, singleSided: !twoSided };
+}
+
+const isQ = l => /^\s*Q\s*[:：]/i.test(l), isA = l => /^\s*A\s*[:：]/i.test(l);
+const KEYWORD_SPLIT = /\s::\s?|\s?::\s/;
+
+// Turns lines into Markdown blocks where every line stays on its own line, as people write short notes.
+function cardLinesToBlocks(lines) {
+  const out = []; let fence = false;
+  for (const l of lines) {
+    if (/^\s*(```|~~~)/.test(l)) fence = !fence;
+    out.push(l);
+    if (!fence) out.push('');
+  }
+  return parseMarkdown(out.join('\n'));
+}
+
+function parseCards(text) {
+  const groups = []; let cur = [], fence = false;
+  for (const l of cleanTextInput(text).split('\n')) {
+    if (/^\s*(```|~~~)/.test(l)) fence = !fence;
+    if (!fence && !l.trim()) { if (cur.length) { groups.push(cur); cur = []; } }
+    else cur.push(l);
+  }
+  if (cur.length) groups.push(cur);
+  const cards = [];
+  for (const g of groups) {
+    let front = g, back = null, kind = 'note';
+    const ai = g.findIndex(isA), di = g.findIndex(l => /^\s*-{3,}\s*$/.test(l));
+    if (isQ(g[0]) || ai > 0) {
+      kind = 'qa';
+      if (ai > 0) { front = g.slice(0, ai); back = g.slice(ai); back[0] = back[0].replace(/^\s*A\s*[:：]\s*/i, ''); }
+      front = [front[0].replace(/^\s*Q\s*[:：]\s*/i, ''), ...front.slice(1)];
+    } else if (di > 0 && di < g.length - 1) {
+      kind = 'split'; front = g.slice(0, di); back = g.slice(di + 1);
+    } else if (KEYWORD_SPLIT.test(g[0])) {
+      kind = 'keyword';
+      const m = g[0].match(KEYWORD_SPLIT);
+      front = [g[0].slice(0, m.index)]; back = [g[0].slice(m.index + m[0].length), ...g.slice(1)];
+    }
+    const trimEnds = a => { a = a.slice(); while (a.length && !a[0].trim()) a.shift(); while (a.length && !a[a.length - 1].trim()) a.pop(); return a; };
+    front = trimEnds(front); back = back ? trimEnds(back) : null;
+    if (back && !back.length) back = null;
+    if (!front.length && !back) continue;
+    const fb = cardLinesToBlocks(front);
+    // A short single line on the front, like a keyword, is set in bold.
+    if (back && front.length === 1 && front[0].trim().length <= 40 && fb.length === 1 && fb[0].type === 'p' && fb[0].runs.every(r => r.f === 'r')) fb[0].runs.forEach(r => { r.f = 'b'; });
+    cards.push({ kind, front: fb, back: back ? cardLinesToBlocks(back) : null });
+  }
+  return cards.filter(c => c.front.length || (c.back && c.back.length));
+}
+
+function cardPageBox(cell) { return { w: cell.w, h: cell.h, padX: 5 * MM, padTop: 5 * MM, padBottom: 7 * MM }; }
+
+// Picks the largest text size that fits the card, then centres the content.
+function layoutCard(blocks, P, maxSize, measure) {
+  let fs = maxSize, pages = layoutText(blocks, P, fs, measure);
+  while (pages.length > 1 && fs > 6.5) { fs = Math.max(6.5, fs - 0.5); pages = layoutText(blocks, P, fs, measure); }
+  const overflow = pages.length > 1, items = pages[0].map(it => ({ ...it }));
+  if (!items.length) return { items, overflow, fs };
+  let top = Infinity, bottom = -Infinity;
+  for (const it of items) {
+    if (it.k === 'text') { top = Math.min(top, it.y - it.s * 0.8); bottom = Math.max(bottom, it.y + it.s * 0.25); }
+    else { top = Math.min(top, it.y1, it.y2); bottom = Math.max(bottom, it.y1, it.y2); }
+  }
+  const avail = P.h - P.padTop - P.padBottom, dy = P.padTop + (avail - (bottom - top)) / 2 - top;
+  if (!overflow && dy > 0) for (const it of items) { if (it.k === 'text') it.y += dy; else { it.y1 += dy; it.y2 += dy; } }
+  const rows = new Map();
+  for (const it of items) if (it.k === 'text') { const key = Math.round(it.y * 10); if (!rows.has(key)) rows.set(key, []); rows.get(key).push(it); }
+  const simple = blocks.every(b => b.type === 'p' || b.type === 'h');
+  if (simple && rows.size <= 5) for (const row of rows.values()) {
+    const x0 = Math.min(...row.map(i => i.x)), x1 = Math.max(...row.map(i => i.x + (i.w || 0)));
+    const dx = P.w / 2 - (x0 + x1) / 2;
+    row.forEach(i => { i.x += dx; });
+  }
+  return { items, overflow, fs };
+}
+
+function cardMaxSize(card, side) {
+  if (side === 'back') return 15;
+  if (!card.back) return 15;
+  return card.kind === 'qa' ? 18 : 22;
+}
+
+// Draws one card side as a vector page.
+function drawCardVector(doc, fonts, P, items, label) {
+  const page = doc.addPage([P.w, P.h]);
+  for (const it of items) {
+    if (it.k === 'text') page.drawText(it.t, { x: it.x, y: P.h - it.y, size: it.s, font: fonts[it.f], color: rgb(...it.c) });
+    else page.drawLine({ start: { x: it.x1, y: P.h - it.y1 }, end: { x: it.x2, y: P.h - it.y2 }, thickness: it.w, color: rgb(...it.c) });
+  }
+  const sz = 6.5;
+  page.drawText(label, { x: (P.w - fonts.r.widthOfTextAtSize(label, sz)) / 2, y: P.padBottom * 0.38, size: sz, font: fonts.r, color: rgb(...GREY) });
+}
+</script>
+
+<!-- Interface -->
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const $ = id => document.getElementById(id);
+const S = { name: '', entries: [], skipped: [], nextId: 0, srcDoc: null, pdfjs: null, info: null, url: null, sources: null, noTrim: new Set(), warnings: [], builtKey: null, building: null, buildError: null };
+const SETTINGS_KEY = 'pustika-settings-v1', OLD_SETTINGS_KEY = 'foldwise-settings-v1';
+
+// Layout tiles
+$('layouts').innerHTML = Object.entries(LAYOUTS).map(([k, L], i) =>
+  `<label class="tile"><input type="radio" name="layout" value="${k}" ${i === 0 ? 'checked' : ''}><b>${L.name}</b><span>${L.good}</span></label>`).join('');
+
+const fields = ['range', 'split', 'sessionSize', 'recall', 'trim', 'trimMode', 'pad', 'paper', 'margin', 'gutter', 'cleanup', 'textSize', 'cardsPerSheet', 'cardPairs', 'bind', 'nsOrient', 'nsPlace', 'nsStyle', 'nsSize', 'nsOuter', 'nsCornell'];
+
+function readOpts() {
+  return {
+    layout: document.querySelector('input[name=layout]:checked').value,
+    range: $('range').value, split: $('split').checked, sessionSize: +$('sessionSize').value || 15,
+    recall: $('recall').checked, trim: $('trim').checked, trimMode: $('trimMode').value, pad: +$('pad').value,
+    paper: $('paper').value, margin: Math.min(25, Math.max(0, +$('margin').value || 0)), gutter: Math.min(25, Math.max(0, +$('gutter').value || 0)),
+    cleanup: $('cleanup').checked, textSize: +$('textSize').value || 11,
+    cardsPerSheet: +$('cardsPerSheet').value || 8, cardPairs: $('cardPairs').value,
+    bind: Math.min(30, Math.max(0, +$('bind').value || 0)),
+    nsOrient: $('nsOrient').value, nsPlace: $('nsPlace').value, nsStyle: $('nsStyle').value,
+    nsSize: +$('nsSize').value || 65, nsOuter: $('nsOuter').checked, nsCornell: $('nsCornell').checked,
+  };
+}
+
+function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(readOpts())); } catch (e) {} }
+function loadSettings() {
+  try {
+    const o = JSON.parse(localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(OLD_SETTINGS_KEY) || 'null');
+    if (!o) return;
+    const r = document.querySelector(`input[name=layout][value="${o.layout}"]`); if (r) r.checked = true;
+    for (const k of fields) {
+      if (k === 'range' || !(k in o)) continue;
+      const el = $(k); if (el.type === 'checkbox') el.checked = o[k]; else el.value = o[k];
+    }
+  } catch (e) {}
+}
+
+function demoInfo(o) {
+  const [w, h] = PAPER[o.paper];
+  return Array.from({ length: 40 }, () => ({ box: { left: 0, bottom: 0, right: Math.min(w, h), top: Math.max(w, h) }, rot: 0 }));
+}
+
+function currentPlan(o) {
+  if (o.layout === 'cards') {
+    const demo = !S.cards;
+    const cards = demo ? Array.from({ length: 16 }, (_, k) => ({ f: 2 * k, b: 2 * k + 1 })) : S.cards;
+    if (!cards.length) return { error: 'No cards found in these files. See the example in the Flash cards section.' };
+    let sel;
+    try { sel = parseRange(demo ? '' : o.range, cards.length).map(k => ({ ...cards[k], no: k + 1 })); }
+    catch (e) { return { error: e.message.replace('this PDF\'s pages', 'the cards') }; }
+    return { plan: planCards(sel, o), indices: sel, cards: true, demo };
+  }
+  const info = S.info || demoInfo(o);
+  let indices;
+  try { indices = parseRange(S.info ? o.range : '', info.length); }
+  catch (e) { return { error: e.message }; }
+  const sessions = makeSessions(indices, o);
+  const plan = planLayout(sessions, o, aspectFn(info, null));
+  return { plan, sessions, info, indices };
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function slotLabel(slot) {
+  if (!slot || slot.t === 'blank') return '';
+  if (slot.t === 'recall') return 'Recall';
+  if (slot.label) return slot.label;
+  return String(slot.i + 1);
+}
+
+function sheetSvg(pg, ox, oy, scale) {
+  let s = `<rect x="${ox}" y="${oy}" width="${pg.w * scale}" height="${pg.h * scale}" rx="3" fill="var(--sheet)" stroke="var(--line)" stroke-width="1.5"/>`;
+  const Y = y => oy + (pg.h - y) * scale, X = x => ox + x * scale;
+  for (const c of pg.cells) {
+    const w = c.w * scale, h = c.h * scale, x = X(c.x), y = Y(c.y + c.h);
+    const lab = slotLabel(c.slot);
+    s += `<rect x="${x + 2}" y="${y + 2}" width="${w - 4}" height="${h - 4}" rx="2" fill="${lab ? 'var(--cell)' : 'none'}" stroke="var(--line)" stroke-dasharray="${lab ? '' : '3 3'}"/>`;
+    if (lab) {
+      const fs = Math.max(9, Math.min(w, h) * (lab === 'Recall' ? 0.16 : 0.32));
+      s += `<text x="${x + w / 2}" y="${y + h / 2}" font-family="var(--display)" font-weight="800" font-size="${fs}" fill="var(--ink)" text-anchor="middle" dominant-baseline="central">${lab}</text>`;
+    }
+  }
+  for (const n of pg.notes || []) {
+    if (n.w < 20 || n.h < 20) continue;
+    if (n.style) { s += noteAreaSvg(n, X, Y, scale); continue; }
+    for (let yy = n.y + n.h - 4; yy > n.y; yy -= 7 * MM * 1.6) s += `<line x1="${X(n.x)}" x2="${X(n.x + n.w)}" y1="${Y(yy)}" y2="${Y(yy)}" stroke="var(--muted)" stroke-width=".7" opacity=".6"/>`;
+  }
+  for (const mk of pg.marks || []) {
+    const v = mk.x1 === mk.x2;
+    if (v) s += `<line x1="${X(mk.x1)}" x2="${X(mk.x1)}" y1="${oy}" y2="${oy + pg.h * scale}" stroke="var(--mark)" stroke-width="1.5" stroke-dasharray="6 4"/>`;
+    else s += `<line y1="${Y(mk.y1)}" y2="${Y(mk.y1)}" x1="${ox}" x2="${ox + pg.w * scale}" stroke="var(--mark)" stroke-width="1.5" stroke-dasharray="6 4"/>`;
+  }
+  return s;
+}
+
+function noteAreaSvg(n, X, Y, scale) {
+  let out = '', top = n.y + n.h;
+  if (n.label) { out += `<text x="${X(n.x) + 1}" y="${Y(top) + 7}" font-size="6.5" font-weight="700" fill="var(--muted)" font-family="var(--body)">${n.label}</text>`; top -= 22; }
+  const st = (n.style === 'lines' ? 7 : 5) * MM * 1.8;
+  if (n.style === 'lines' || n.style === 'squares') for (let y = top - st; y > n.y; y -= st) out += `<line x1="${X(n.x)}" x2="${X(n.x + n.w)}" y1="${Y(y)}" y2="${Y(y)}" stroke="var(--muted)" stroke-width=".6" opacity=".55"/>`;
+  if (n.style === 'squares') for (let x = n.x; x < n.x + n.w; x += st) out += `<line x1="${X(x)}" x2="${X(x)}" y1="${Y(top)}" y2="${Y(n.y)}" stroke="var(--muted)" stroke-width=".6" opacity=".4"/>`;
+  if (n.style === 'dots') for (let y = top - st; y > n.y; y -= st) for (let x = n.x + st / 2; x < n.x + n.w; x += st) out += `<circle cx="${X(x)}" cy="${Y(y)}" r=".9" fill="var(--muted)"/>`;
+  if (n.style === 'blank') out += `<rect x="${X(n.x)}" y="${Y(n.y + n.h)}" width="${n.w * scale}" height="${n.h * scale}" fill="none" stroke="var(--line)" stroke-dasharray="3 3"/>`;
+  return out;
+}
+
+function updatePreview() {
+  const o = readOpts();
+  const kind = LAYOUTS[o.layout].kind, isCards = kind === 'cards';
+  $('gutterField').hidden = !(kind === 'booklet' || kind === 'pocket');
+  const bindable = kind === 'nup' || kind === 'notes' || kind === 'notesheet' || kind === 'cutstack';
+  $('nsPanel').hidden = kind !== 'notesheet';
+  $('nsSizeOut').textContent = o.nsSize + '%';
+  $('bindField').hidden = !bindable; $('bindHint').hidden = !bindable;
+  $('cardPanel').hidden = !isCards;
+  $('splitRow').hidden = isCards; $('recallRow').hidden = isCards;
+  $('pagesTitle').textContent = isCards ? 'Cards to print' : 'Pages and study sessions';
+  $('pagesHint').textContent = isCards ? 'Leave empty to print every card, or pick some by number, like 1-24.' : 'Print a session, study it, then print the next. Short sessions keep each stack small enough to finish.';
+  $('rangeLabel').textContent = isCards ? 'Card numbers' : 'Pages to print';
+  $('range').placeholder = isCards ? 'All cards, or e.g. 1-24, 30' : 'All pages, or e.g. 1-20, 25, 40-';
+  $('trimOpts').hidden = !o.trim;
+  $('padOut').textContent = o.pad + '%';
+  $('sessionSize').disabled = !o.split;
+  const kinds = new Set(S.entries.map(e => e.kind));
+  $('convPanel').hidden = !(kinds.has('image') || kinds.has('text') || kinds.has('md'));
+  $('cleanupRow').hidden = !kinds.has('image');
+  $('textSizeRow').hidden = !(kinds.has('text') || kinds.has('md')) || isCards;
+  $('cardPairsField').hidden = !(kinds.has('pdf') || kinds.has('image'));
+  $('convPanel').hidden = $('convPanel').hidden || ($('cleanupRow').hidden && $('textSizeRow').hidden);
+  saveSettings();
+  if (S.entries.length && sourceKey(o) !== S.builtKey && sourceKey(o) !== S.failedKey) {
+    clearTimeout(S.rebuildTimer);
+    S.rebuildTimer = setTimeout(() => ensureSource(), 350);
+  }
+
+  const r = currentPlan(o);
+  if (r.error) { $('diagram').innerHTML = ''; $('summary').textContent = ''; $('howto').innerHTML = ''; setStatus(r.error, true); $('go').disabled = true; return; }
+  if (S.building) { setStatus('Preparing pages…'); $('go').disabled = true; }
+  else if (S.srcDoc) { setStatus('Ready when you are.'); $('go').disabled = false; }
+  else if (S.entries.length) { setStatus(S.buildError || 'Preparing pages…', !!S.buildError); $('go').disabled = !!S.buildError; }
+  else { setStatus('Choose files to begin.'); $('go').disabled = true; }
+
+  const { plan } = r;
+  const front = plan.pages[0] || { w: 595, h: 842, cells: [] };
+  const back = plan.singleSided ? null : (plan.pages[1] || { w: front.w, h: front.h, cells: [] });
+  if (!back) {
+    const sc = 190 / front.w;
+    $('diagram').innerHTML = `<svg viewBox="0 0 400 ${front.h * sc + 10}" role="img" aria-label="Layout of the first sheet">${sheetSvg(front, 105, 5, sc)}</svg><div class="cap"><span>Front only</span></div>`;
+  } else {
+  const maxH = Math.max(front.h, back.h), gap = 26, totalW = front.w + back.w + gap * 3;
+  const scale = 400 / totalW, H = maxH * scale + 10;
+  $('diagram').innerHTML = `<svg viewBox="0 0 400 ${H}" role="img" aria-label="Layout of the first sheet, front and back">
+    ${sheetSvg(front, gap * scale, 5 + (maxH - front.h) * scale / 2, scale)}
+    ${sheetSvg(back, (front.w + gap * 2) * scale, 5 + (maxH - back.h) * scale / 2, scale)}
+  </svg><div class="cap"><span>Front</span><span>Back</span></div>`;
+  }
+
+  const sheets = plan.sheets, blanks = plan.sessions.reduce((a, s) => a + s.blanks, 0);
+  const what = r.cards ? (r.demo ? 'Example: 16 cards' : `${r.indices.length} card${r.indices.length === 1 ? '' : 's'}`) : S.srcDoc ? `${r.indices.length} page${r.indices.length === 1 ? '' : 's'}` : 'Example';
+  let sum = `${what}: ${sheets} sheet${sheets === 1 ? '' : 's'} of paper`;
+  if (plan.sessions.length > 1) sum += ` in ${plan.sessions.length} sessions`;
+  if (blanks) sum += `, ${blanks} blank page${blanks === 1 ? '' : 's'} added to fill sheets`;
+  sum += '.';
+  if (o.layout === 'booklet' && plan.sessions.some(s => s.sheets > 8)) sum += ' Booklets over 8 sheets get hard to fold; try smaller sessions.';
+  if (o.layout === 'booklet' && o.split && blanks) {
+    const best = o.recall ? '11, 15 or 19' : '12, 16 or 20';
+    sum += ` Sessions of ${best} pages fill booklets with no blanks.`;
+  }
+  if (kind === 'notesheet' && o.nsOrient === 'portrait' && o.nsPlace !== 'below' && S.info && r.indices && r.indices.length) {
+    const asp = aspectFn(S.info, null), wide = r.indices.filter(i => asp({ t: 'src', i }) > 1.1).length;
+    if (wide > r.indices.length / 2) sum += ' These pages are landscape, so they print small beside notes on upright paper. Try landscape paper or notes below.';
+  }
+  if (o.layout === 'pocket' && plan.sessions.some(s => s.sheets > 4)) sum += ' Pocket books over 4 sheets get hard to fold; try smaller sessions.';
+  if (o.layout === 'pocket' && o.split && blanks) {
+    const best = o.recall ? '7, 15 or 23' : '8, 16 or 24';
+    sum += ` Sessions of ${best} pages fill pocket books with no blanks.`;
+  }
+  $('summary').textContent = sum;
+  $('howto').innerHTML = printAdvice(plan).map(l => `<p>${l}</p>`).join('');
+}
+
+function setStatus(msg, err) { $('status').textContent = msg; $('status').className = 'status' + (err ? ' err' : ''); }
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+// ---------- Turning files into one source PDF ----------
+
+const IMAGE_EXT = /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i;
+function kindOf(file) {
+  const n = file.name, t = file.type || '';
+  if (/\.pdf$/i.test(n) || t === 'application/pdf') return 'pdf';
+  if (t.startsWith('image/') || IMAGE_EXT.test(n)) return 'image';
+  if (/\.(md|markdown)$/i.test(n) || t === 'text/markdown') return 'md';
+  if (/\.txt$/i.test(n) || t === 'text/plain') return 'text';
+  if (/\.(docx?|odt|rtf|pages)$/i.test(n)) return 'unsupported:Word files aren\u2019t supported yet. In Word or Google Docs, save or download it as PDF, then add the PDF.';
+  if (/\.(pptx?|key|odp)$/i.test(n)) return 'unsupported:Slides files aren\u2019t supported. Export it as PDF from PowerPoint, Keynote or Google Slides, then add the PDF.';
+  if (/\.(xlsx?|ods|csv)$/i.test(n)) return 'unsupported:Spreadsheets aren\u2019t supported. Export it as PDF first.';
+  if (/\.epub$/i.test(n)) return 'unsupported:EPUB books aren\u2019t supported yet.';
+  return 'unsupported:This file type isn\u2019t supported. Use PDF, JPG, PNG, TXT or Markdown.';
+}
+
+const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+
+async function decodeImage(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    if (!img.naturalWidth) throw new Error('empty');
+    return { img, url };
+  } catch (e) {
+    URL.revokeObjectURL(url);
+    if (/\.(heic|heif)$/i.test(file.name)) throw new Error('this browser can\u2019t open HEIC photos. On iPhone, share the photo as JPG, or set Settings > Camera > Formats to Most Compatible.');
+    throw new Error('the image couldn\u2019t be read.');
+  }
+}
+
+// Whitens paper and darkens ink in photos of notes, including uneven lighting and shadows.
+function cleanPhoto(canvas, ctx) {
+  const W = canvas.width, H = canvas.height;
+  const sw = Math.max(8, Math.round(W / 16)), sh = Math.max(8, Math.round(H / 16));
+  const sc = document.createElement('canvas'); sc.width = sw; sc.height = sh;
+  const sx = sc.getContext('2d', { willReadFrequently: true });
+  sx.imageSmoothingQuality = 'high';
+  sx.drawImage(canvas, 0, 0, sw, sh);
+  const sd = sx.getImageData(0, 0, sw, sh);
+  let lum = new Float32Array(sw * sh);
+  for (let i = 0; i < lum.length; i++) lum[i] = Math.max(sd.data[i * 4], sd.data[i * 4 + 1], sd.data[i * 4 + 2]);
+  const filter = (src, r, op) => {
+    const out = new Float32Array(src.length);
+    for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) {
+      let acc = op === 'max' ? 0 : 0, n = 0;
+      for (let dy = -r; dy <= r; dy++) {
+        const yy = Math.min(sh - 1, Math.max(0, y + dy));
+        for (let dx = -r; dx <= r; dx++) {
+          const v = src[yy * sw + Math.min(sw - 1, Math.max(0, x + dx))];
+          if (op === 'max') { if (v > acc) acc = v; } else { acc += v; n++; }
+        }
+      }
+      out[y * sw + x] = op === 'max' ? acc : acc / n;
+    }
+    return out;
+  };
+  lum = filter(filter(lum, 3, 'max'), 3, 'mean');
+  for (let i = 0; i < lum.length; i++) { sd.data[i * 4] = sd.data[i * 4 + 1] = sd.data[i * 4 + 2] = lum[i]; sd.data[i * 4 + 3] = 255; }
+  sx.putImageData(sd, 0, 0);
+  const bc = document.createElement('canvas'); bc.width = W; bc.height = H;
+  const bx = bc.getContext('2d', { willReadFrequently: true });
+  bx.imageSmoothingQuality = 'high';
+  bx.drawImage(sc, 0, 0, W, H);
+  const bg = bx.getImageData(0, 0, W, H).data, d = ctx.getImageData(0, 0, W, H), px = d.data;
+  const lut = new Uint8ClampedArray(1001);
+  for (let i = 0; i <= 1000; i++) lut[i] = 255 * Math.pow(Math.min(1, i / 1000 / 0.88), 1.8);
+  for (let p = 0; p < px.length; p += 4) {
+    const b = Math.max(24, bg[p]);
+    for (let c = 0; c < 3; c++) px[p + c] = lut[Math.min(1000, Math.round(px[p + c] / b * 1000))];
+  }
+  ctx.putImageData(d, 0, 0);
+}
+
+async function imageToJpeg(file, cleanup) {
+  const { img, url } = await decodeImage(file);
+  try {
+    const k = Math.min(1, 2400 / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * k)); canvas.height = Math.max(1, Math.round(img.naturalHeight * k));
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    if (cleanup) cleanPhoto(canvas, ctx);
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.88));
+    if (!blob) throw new Error('the image is too large for this browser to process.');
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), w: canvas.width, h: canvas.height };
+  } finally { URL.revokeObjectURL(url); }
+}
+
+const SERIF = 'Georgia, "Times New Roman", "Noto Serif", "Noto Serif Devanagari", "Nirmala UI", "Kohinoor Devanagari", serif';
+const MONO = 'ui-monospace, Menlo, Consolas, "Courier New", monospace';
+function cssFont(f, px) {
+  return f === 'm' ? `${px}px ${MONO}` : `${f === 'b' ? 'bold ' : f === 'i' ? 'italic ' : ''}${px}px ${SERIF}`;
+}
+
+// Text in scripts the built-in PDF fonts can't show (Hindi, for example) is drawn by the browser at 300 dpi.
+async function drawTextPagesRaster(doc, blocks, cell, fs) {
+  const P = textPageBox(cell), k = 300 / 72;
+  const mc = document.createElement('canvas').getContext('2d'), cache = new Map();
+  const measure = (t, f, s) => {
+    const key = f + '\u0001' + t;
+    let w = cache.get(key);
+    if (w === undefined) { mc.font = cssFont(f, 100); w = mc.measureText(t).width / 100; cache.set(key, w); }
+    return w * s;
+  };
+  const pages = layoutText(blocks, P, fs, measure);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(P.w * k); canvas.height = Math.round(P.h * k);
+  const ctx = canvas.getContext('2d');
+  const css = c => `rgb(${c.map(v => Math.round(v * 255)).join(',')})`;
+  for (let n = 0; n < pages.length; n++) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.textBaseline = 'alphabetic';
+    for (const it of pages[n]) {
+      if (it.k === 'text') { ctx.font = cssFont(it.f, it.s); ctx.fillStyle = css(it.c); ctx.fillText(it.t, it.x, it.y); }
+      else { ctx.strokeStyle = css(it.c); ctx.lineWidth = it.w; ctx.beginPath(); ctx.moveTo(it.x1, it.y1); ctx.lineTo(it.x2, it.y2); ctx.stroke(); }
+    }
+    ctx.font = cssFont('r', fs * 0.75); ctx.fillStyle = css(GREY); ctx.textAlign = 'center';
+    ctx.fillText(String(n + 1), P.w / 2, P.h - P.padBottom * 0.42); ctx.textAlign = 'left';
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    const png = await doc.embedPng(new Uint8Array(await blob.arrayBuffer()));
+    doc.addPage([P.w, P.h]).drawImage(png, { x: 0, y: 0, width: P.w, height: P.h });
+    if (n % 4 === 3) { setStatus(`Laying out text: page ${n + 1} of ${pages.length}`); await tick(); }
+  }
+  return pages.length;
+}
+
+function canvasMeasure() {
+  const mc = document.createElement('canvas').getContext('2d'), cache = new Map();
+  return (t, f, s) => {
+    const key = f + '\u0001' + t;
+    let w = cache.get(key);
+    if (w === undefined) { mc.font = cssFont(f, 100); w = mc.measureText(t).width / 100; cache.set(key, w); }
+    return w * s;
+  };
+}
+
+// Draws layout items onto one 300 dpi image page, for scripts the built-in PDF fonts can't show.
+async function drawItemsRaster(doc, P, items, footer, footerSize, footerY) {
+  const k = 300 / 72, canvas = document.createElement('canvas');
+  canvas.width = Math.round(P.w * k); canvas.height = Math.round(P.h * k);
+  const ctx = canvas.getContext('2d');
+  const css = c => `rgb(${c.map(v => Math.round(v * 255)).join(',')})`;
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  ctx.textBaseline = 'alphabetic';
+  for (const it of items) {
+    if (it.k === 'text') { ctx.font = cssFont(it.f, it.s); ctx.fillStyle = css(it.c); ctx.fillText(it.t, it.x, it.y); }
+    else { ctx.strokeStyle = css(it.c); ctx.lineWidth = it.w; ctx.beginPath(); ctx.moveTo(it.x1, it.y1); ctx.lineTo(it.x2, it.y2); ctx.stroke(); }
+  }
+  if (footer) { ctx.font = cssFont('r', footerSize); ctx.fillStyle = css(GREY); ctx.textAlign = 'center'; ctx.fillText(footer, P.w / 2, P.h - footerY); }
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+  const png = await doc.embedPng(new Uint8Array(await blob.arrayBuffer()));
+  doc.addPage([P.w, P.h]).drawImage(png, { x: 0, y: 0, width: P.w, height: P.h });
+}
+
+// What the built source depends on, so it is rebuilt only when needed.
+function sourceKey(o) {
+  const kinds = new Set(S.entries.map(e => e.kind));
+  const text = kinds.has('text') || kinds.has('md') ? [o.layout, o.paper, o.margin, o.gutter, o.bind, o.textSize, o.cardsPerSheet, o.nsOrient, o.nsPlace, o.nsSize].join('|') : '';
+  const img = kinds.has('image') ? String(o.cleanup) : '';
+  const cards = o.layout === 'cards' ? 'cards|' + o.cardPairs : 'pages';
+  return S.entries.map(e => e.id).join(',') + '#' + text + '#' + img + '#' + cards;
+}
+
+async function buildSource(entries, o) {
+  const warnings = [];
+  // In flash-card mode, every page or text card becomes a card with an optional back.
+  const cardsMode = o.layout === 'cards', cards = cardsMode ? [] : null;
+  let pending = null;
+  const pageCards = (start, end) => {
+    if (!cardsMode) return;
+    for (let p = start; p < end; p++) {
+      if (o.cardPairs === 'pairs') { if (pending === null) pending = p; else { cards.push({ f: pending, b: p }); pending = null; } }
+      else cards.push({ f: p, b: null });
+    }
+  };
+  const flushPending = () => { if (pending !== null) { cards.push({ f: pending, b: null }); pending = null; } };
+  const numbered = () => { if (cards) cards.forEach((c, k) => { c.no = k + 1; }); return cards; };
+  if (entries.length === 1 && entries[0].kind === 'pdf') {
+    const e = entries[0];
+    const doc = await PDFDocument.load(e.bytes, { ignoreEncryption: true });
+    if (doc.isEncrypted) throw new Error(`${e.name} is password-protected. Remove the protection first, then try again.`);
+    pageCards(0, doc.getPageCount()); flushPending();
+    return { doc, bytes: e.bytes, sources: [{ name: e.name, kind: 'pdf', start: 1, end: doc.getPageCount() }], noTrim: new Set(), warnings, cards: numbered() };
+  }
+  const out = await PDFDocument.create(), sources = [], noTrim = new Set();
+  let fonts = null;
+  const cell = textCell(o);
+  for (let n = 0; n < entries.length; n++) {
+    const e = entries[n];
+    const start = out.getPageCount();
+    setStatus(`Preparing ${e.name} (${n + 1} of ${entries.length})…`); await tick();
+    try {
+      let note = '';
+      if (e.kind === 'pdf') {
+        const src = await PDFDocument.load(e.bytes, { ignoreEncryption: true });
+        if (src.isEncrypted) throw new Error('it is password-protected.');
+        (await out.copyPages(src, src.getPageIndices())).forEach(p => out.addPage(p));
+        pageCards(start, out.getPageCount());
+      } else if (e.kind === 'image') {
+        if (e.failed) throw new Error(e.failed);
+        const key = String(o.cleanup);
+        if (!e.cache || e.cache.key !== key) e.cache = { key, ...(await imageToJpeg(e.file, o.cleanup)) };
+        const img = await out.embedJpg(e.cache.bytes);
+        const s = 842 / Math.max(e.cache.w, e.cache.h), pw = e.cache.w * s, ph = e.cache.h * s;
+        out.addPage([pw, ph]).drawImage(img, { x: 0, y: 0, width: pw, height: ph });
+        pageCards(start, out.getPageCount());
+        note = 'photo';
+      } else if (cardsMode) {
+        flushPending();
+        const deck = parseCards(e.text);
+        if (!deck.length) throw new Error('no cards were found in it.');
+        if (!fonts) fonts = await standardTextFonts(out);
+        const vector = canUseStandardFonts(fonts, deck.flatMap(c => [...c.front, ...(c.back || [])]));
+        const P = cardPageBox(cardCell(o));
+        const measure = vector ? (t, f, sz) => fonts[f].widthOfTextAtSize(t, sz) : canvasMeasure();
+        const tooLong = [];
+        for (let k = 0; k < deck.length; k++) {
+          const card = deck[k], no = cards.length + 1, label = String(no);
+          const side = async (blocks, which) => {
+            const L = layoutCard(blocks, P, cardMaxSize(card, which), measure);
+            if (L.overflow && !tooLong.includes(no)) tooLong.push(no);
+            const idx = out.getPageCount();
+            if (vector) drawCardVector(out, fonts, P, L.items, label);
+            else await drawItemsRaster(out, P, L.items, label, 6.5, P.padBottom * 0.38);
+            noTrim.add(idx);
+            return idx;
+          };
+          const f = await side(card.front, 'front');
+          const b = card.back ? await side(card.back, 'back') : null;
+          cards.push({ f, b });
+          if (k % 10 === 9) { setStatus(`Making cards from ${e.name}: ${k + 1} of ${deck.length}`); await tick(); }
+        }
+        if (tooLong.length) warnings.push(`In ${e.name}, card${tooLong.length > 1 ? 's' : ''} ${tooLong.join(', ')} ${tooLong.length > 1 ? 'have' : 'has'} too much text to fit, so the end is cut off. Split ${tooLong.length > 1 ? 'them' : 'it'} into more cards.`);
+        note = `${deck.length} card${deck.length === 1 ? '' : 's'}${vector ? '' : ', as images for non-Latin script'}`;
+      } else {
+        const blocks = e.kind === 'md' ? parseMarkdown(e.text) : parsePlainText(e.text);
+        if (!blocks.length) throw new Error('the file is empty.');
+        if (!fonts) fonts = await standardTextFonts(out);
+        if (canUseStandardFonts(fonts, blocks)) drawTextPagesVector(out, fonts, blocks, cell, o.textSize);
+        else { await drawTextPagesRaster(out, blocks, cell, o.textSize); note = 'text, as images for non-Latin script'; }
+        for (let i = start; i < out.getPageCount(); i++) noTrim.add(i);
+        note = note || 'text';
+      }
+      if (out.getPageCount() > start) sources.push({ name: e.name, kind: e.kind, start: start + 1, end: out.getPageCount(), note });
+    } catch (err) {
+      const msg = err && err.message && !/^[A-Z][a-z]+Error/.test(err.message) ? err.message : 'it couldn\u2019t be read.';
+      if (e.kind === 'image') e.failed = msg;
+      warnings.push(`Skipped ${e.name}: ${msg}`);
+    }
+  }
+  flushPending();
+  if (!out.getPageCount()) { const err = new Error('None of these files could be used.'); err.warnings = warnings; throw err; }
+  const bytes = await out.save();
+  return { doc: await PDFDocument.load(bytes), bytes, sources, noTrim, warnings, cards: numbered() };
+}
+
+let buildToken = 0;
+// Makes sure S.srcDoc matches the current files and options. Returns false if a newer build replaced this one.
+async function ensureSource() {
+  if (!S.entries.length) return false;
+  const o = readOpts(), key = sourceKey(o);
+  if (S.builtKey === key && S.srcDoc) return true;
+  if (S.building && S.building.key === key) return S.building.promise;
+  const token = ++buildToken;
+  $('go').disabled = true;
+  const promise = (async () => {
+    try {
+      const r = await buildSource(S.entries, o);
+      if (token !== buildToken) return false;
+      const pdfjs = await pdfjsLib.getDocument({ data: r.bytes.slice() }).promise;
+      if (token !== buildToken) { pdfjs.destroy(); return false; }
+      if (S.pdfjs) S.pdfjs.destroy();
+      Object.assign(S, { srcDoc: r.doc, pdfjs, info: pageInfoFromDoc(r.doc), sources: r.sources, noTrim: r.noTrim, warnings: r.warnings, cards: r.cards, builtKey: key, failedKey: null, buildError: null });
+      showFileInfo();
+      return true;
+    } catch (e) {
+      console.error(e);
+      if (token !== buildToken) return false;
+      Object.assign(S, { srcDoc: null, info: null, sources: null, cards: null, warnings: e.warnings || [], builtKey: null, failedKey: key, buildError: e.message || 'These files couldn\u2019t be opened.' });
+      showFileInfo();
+      return false;
+    } finally {
+      if (token === buildToken) { S.building = null; showFileInfo(); updatePreview(); }
+    }
+  })();
+  S.building = { key, promise };
+  setStatus('Preparing pages…');
+  showFileInfo();
+  return promise;
+}
+
+function showFileInfo() {
+  const fi = $('fileinfo');
+  if (!S.entries.length) { fi.hidden = true; $('fileActions').hidden = true; return; }
+  fi.hidden = false; $('fileActions').hidden = false;
+  let html = '';
+  if (!S.sources && S.building) {
+    html += `<p>Preparing ${S.entries.length} file${S.entries.length === 1 ? '' : 's'}…</p>`;
+  } else if (S.sources && S.sources.length) {
+    const total = S.info ? S.info.length : 0;
+    html += `<p><b>${total} page${total === 1 ? '' : 's'}</b> from ${S.sources.length} file${S.sources.length === 1 ? '' : 's'}</p>`;
+    if (S.sources.length > 1 || S.sources[0].kind !== 'pdf') {
+      html += '<ul class="srclist">' + S.sources.map(s => `<li><span>${esc(s.name)}</span><span>${s.start === s.end ? 'page ' + s.start : 'pages ' + s.start + '–' + s.end}${s.note ? ', ' + esc(s.note) : ''}</span></li>`).join('') + '</ul>';
+    }
+  }
+  for (const w of [...(S.skipped || []), ...(S.warnings || [])]) html += `<p class="warn">${esc(w)}</p>`;
+  if (S.buildError) html += `<p class="warn">${esc(S.buildError)}</p>`;
+  fi.innerHTML = html;
+}
+
+async function addFiles(fileList, replace) {
+  const files = [...fileList].sort(byName);
+  if (!files.length) return;
+  if (replace) { S.entries = []; S.skipped = []; }
+  $('result').hidden = true;
+  for (const file of files) {
+    const kind = kindOf(file);
+    if (kind.startsWith('unsupported:')) { S.skipped.push(`Skipped ${file.name}: ${kind.slice(12)}`); continue; }
+    const e = { id: ++S.nextId, name: file.name, kind, file };
+    try {
+      if (kind === 'pdf') e.bytes = new Uint8Array(await file.arrayBuffer());
+      if (kind === 'text' || kind === 'md') e.text = await file.text();
+    } catch (err) { S.skipped.push(`Skipped ${file.name}: it couldn\u2019t be read.`); continue; }
+    S.entries.push(e);
+  }
+  const first = S.entries[0];
+  S.name = !first ? '' : first.name.replace(/\.[^.]+$/, '') + (S.entries.length > 1 ? '-combined' : '');
+  $('range').value = '';
+  Object.assign(S, { srcDoc: null, info: null, sources: null, cards: null, builtKey: null, failedKey: null, buildError: null, warnings: [] });
+  showFileInfo();
+  if (!S.entries.length) { updatePreview(); setStatus('None of these files can be used. Choose a PDF, photos, or text files.', true); return; }
+  await ensureSource();
+}
+
+function startOver() {
+  buildToken++;
+  if (S.pdfjs) S.pdfjs.destroy();
+  Object.assign(S, { entries: [], skipped: [], srcDoc: null, pdfjs: null, info: null, sources: null, cards: null, builtKey: null, failedKey: null, building: null, buildError: null, warnings: [] });
+  $('file').value = ''; $('fileAdd').value = ''; $('range').value = '';
+  $('result').hidden = true;
+  showFileInfo(); updatePreview();
+}
+
+// Finds the inked area of each page by rendering it small and scanning for non-white pixels.
+async function measureTrims(indices, o) {
+  const raw = {}, canvas = document.createElement('canvas'), ctx = canvas.getContext('2d', { willReadFrequently: true });
+  indices = indices.filter(i => !S.noTrim.has(i));
+  for (let k = 0; k < indices.length; k++) {
+    const i = indices[k];
+    const page = await S.pdfjs.getPage(i + 1);
+    const vp1 = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: 420 / Math.max(vp1.width, vp1.height) });
+    canvas.width = Math.ceil(vp.width); canvas.height = Math.ceil(vp.height);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const rows = new Uint32Array(height), cols = new Uint32Array(width);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const p = (y * width + x) * 4;
+      if (Math.min(data[p], data[p + 1], data[p + 2]) < 215) { rows[y]++; cols[x]++; }
+    }
+    const minR = Math.max(1, Math.floor(width * 0.004)), minC = Math.max(1, Math.floor(height * 0.004));
+    let y0 = rows.findIndex(v => v >= minR), x0 = cols.findIndex(v => v >= minC);
+    let y1 = height - 1 - [...rows].reverse().findIndex(v => v >= minR), x1 = width - 1 - [...cols].reverse().findIndex(v => v >= minC);
+    if (y0 < 0 || x0 < 0) raw[i] = null;
+    else {
+      const a = vp.convertToPdfPoint(x0, y0), b = vp.convertToPdfPoint(x1 + 1, y1 + 1);
+      raw[i] = { left: Math.min(a[0], b[0]), right: Math.max(a[0], b[0]), bottom: Math.min(a[1], b[1]), top: Math.max(a[1], b[1]) };
+    }
+    page.cleanup();
+    if (k % 5 === 0) { setStatus(`Measuring margins: page ${k + 1} of ${indices.length}`); await tick(); }
+  }
+  const union = (a, b) => !a ? b : !b ? a : { left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), bottom: Math.min(a.bottom, b.bottom), top: Math.max(a.top, b.top) };
+  const groupKey = i => { const b = S.info[i].box; return `${i % 2}|${Math.round(b.right - b.left)}x${Math.round(b.top - b.bottom)}`; };
+  const groups = {};
+  if (o.trimMode === 'uniform') for (const i of indices) groups[groupKey(i)] = union(groups[groupKey(i)], raw[i]);
+  const trims = {};
+  for (const i of indices) {
+    const crop = S.info[i].box;
+    const ink = o.trimMode === 'uniform' ? groups[groupKey(i)] : raw[i];
+    if (!ink) continue;
+    const pad = (o.pad / 100) * Math.min(crop.right - crop.left, crop.top - crop.bottom);
+    const t = {
+      left: Math.max(crop.left, ink.left - pad), right: Math.min(crop.right, ink.right + pad),
+      bottom: Math.max(crop.bottom, ink.bottom - pad), top: Math.min(crop.top, ink.top + pad),
+    };
+    if (t.right - t.left > 10 && t.top - t.bottom > 10) trims[i] = t;
+  }
+  return trims;
+}
+
+async function renderThumbs(bytes, singleSided) {
+  const doc = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+  const n = Math.min(4, doc.numPages), wrap = $('thumbs');
+  wrap.innerHTML = '';
+  for (let p = 1; p <= n; p++) {
+    const page = await doc.getPage(p), vp1 = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: 360 / Math.max(vp1.width, vp1.height) });
+    const fig = document.createElement('figure'), c = document.createElement('canvas');
+    c.width = vp.width; c.height = vp.height;
+    fig.append(c); const cap = document.createElement('figcaption');
+    cap.textContent = singleSided ? `Sheet ${p}` : `Sheet ${Math.ceil(p / 2)} ${p % 2 ? 'front' : 'back'}`; fig.append(cap); wrap.append(fig);
+    await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+  }
+  doc.destroy();
+}
+
+async function generate() {
+  const o = readOpts();
+  $('go').disabled = true; $('result').hidden = true; $('thumbs').innerHTML = '';
+  try {
+    clearTimeout(S.rebuildTimer);
+    if (!(await ensureSource()) || !S.srcDoc) throw new Error(S.buildError || 'The files are still being prepared. Try again in a moment.');
+    let plan, sessions, trims;
+    if (o.layout === 'cards') {
+      if (!S.cards || !S.cards.length) throw new Error('No cards found in these files. See the example in the Flash cards section.');
+      const sel = parseRange(o.range, S.cards.length).map(k => ({ ...S.cards[k], no: k + 1 }));
+      const used = [...new Set(sel.flatMap(c => c.b == null ? [c.f] : [c.f, c.b]))];
+      trims = o.trim ? await measureTrims(used, o) : null;
+      plan = planCards(sel, o);
+      sessions = [{ pages: used, slots: [] }];
+    } else {
+      const indices = parseRange(o.range, S.info.length);
+      sessions = makeSessions(indices, o);
+      trims = o.trim ? await measureTrims(indices, o) : null;
+      plan = planLayout(sessions, o, aspectFn(S.info, trims));
+    }
+    setStatus('Building PDF…'); await tick();
+    const bytes = await renderPdf(S.srcDoc, S.info, trims, plan, sessions, async m => { setStatus(m); await tick(); });
+    if (S.url) URL.revokeObjectURL(S.url);
+    S.url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    $('dl').href = S.url; $('dl').download = `${S.name}-${o.layout}.pdf`; $('open').href = S.url;
+    if (o.layout === 'cards') {
+      const c = plan.sessions[0];
+      $('sessTable').innerHTML = `<thead><tr><th>Cards</th><th>Print these PDF pages</th><th>Sheets</th></tr></thead><tbody><tr><td>${c.count} (numbered ${c.from}–${c.to})</td><td>${c.start}–${c.end}</td><td>${c.sheets}</td></tr></tbody>`;
+    } else {
+      const rows = plan.sessions.map(s => `<tr><td>${s.no}</td><td>${s.from}–${s.to}</td><td>${s.start}–${s.end}</td><td>${s.sheets}</td></tr>`).join('');
+      $('sessTable').innerHTML = `<thead><tr><th>Session</th><th>Source pages</th><th>Print these PDF pages</th><th>Sheets</th></tr></thead><tbody>${rows}</tbody>`;
+    }
+    $('result').hidden = false;
+    setStatus(`Done: ${plan.sheets} sheet${plan.sheets === 1 ? '' : 's'}, ${plan.pages.length} printed side${plan.pages.length === 1 ? '' : 's'}.`);
+    await renderThumbs(bytes, plan.singleSided);
+  } catch (e) {
+    console.error(e);
+    setStatus(e.message || 'Something went wrong while building the PDF.', true);
+  } finally { $('go').disabled = !S.srcDoc || !!S.building; }
+}
+
+// Events
+$('file').addEventListener('change', e => addFiles(e.target.files, true));
+$('fileAdd').addEventListener('change', e => { addFiles(e.target.files, false); e.target.value = ''; });
+$('addLabel').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fileAdd').click(); } });
+$('clear').addEventListener('click', startOver);
+$('sampleCards').href = URL.createObjectURL(new Blob([document.querySelector('pre.example').textContent + '\n'], { type: 'text/plain' }));
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addFiles(e.dataTransfer.files, true));
+document.addEventListener('input', e => { if (e.target.closest('main') && e.target.type !== 'file') updatePreview(); });
+document.addEventListener('change', e => { if (e.target.closest('main') && e.target.type !== 'file') updatePreview(); });
+$('go').addEventListener('click', generate);
+
+loadSettings();
+updatePreview();
+</script>
+</body>
+</html>
