@@ -404,7 +404,8 @@ Happens in the matrix</pre><span class="res">Above the --- line goes on the fron
 </aside>
 </div>
 
-<footer>Pages from your PDFs are copied as they are, so text stays sharp. Everything happens in your browser.</footer>
+<footer>Pages from your PDFs are copied as they are, so text stays sharp. Everything happens in your browser.
+  <button type="button" class="secondary small" id="resetSettings" style="margin-top:12px;display:block">Reset all settings</button></footer>
 </div>
 
 <!-- Core: layout planning and PDF building. No DOM access, so it can be tested on its own. -->
@@ -1239,7 +1240,6 @@ function loadSettings() {
   try {
     const o = JSON.parse(localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(OLD_SETTINGS_KEY) || 'null');
     if (!o) return;
-    const r = document.querySelector(`input[name=layout][value="${o.layout}"]`); if (r) r.checked = true;
     for (const k of fields) {
       if (k === 'range' || !(k in o)) continue;
       const el = $(k); if (!el) continue;
@@ -1935,6 +1935,10 @@ $('file').addEventListener('change', e => addFiles(e.target.files, true));
 $('fileAdd').addEventListener('change', e => { addFiles(e.target.files, false); e.target.value = ''; });
 $('addLabel').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fileAdd').click(); } });
 $('clear').addEventListener('click', startOver);
+$('resetSettings').addEventListener('click', () => {
+  try { localStorage.removeItem(SETTINGS_KEY); localStorage.removeItem(OLD_SETTINGS_KEY); } catch (e) {}
+  location.reload();
+});
 const SAMPLE_CARDS = `Q: Where do the light reactions happen?
 A: In the thylakoid membranes.
 
