@@ -290,9 +290,14 @@ Happens in the matrix</pre><span class="res">Above the --- line goes on the fron
             <span class="ctl"><input type="range" id="nsSize" min="45" max="85" step="5" value="65"><output id="nsSizeOut">65%</output></span>
           </label>
           <p class="hint under">Smaller pages leave more room for notes. Keep dense textbook pages larger.</p>
-          <label class="c"><input type="checkbox" id="nsOuter" checked>
-            <span>Keep notes on the outer edge<span class="hint">Right side on fronts and left side on backs, away from staples or binding.</span></span>
+          <label class="f" id="nsSideField"><span>Notes side</span>
+            <select id="nsSide">
+              <option value="right">Right side on every page</option>
+              <option value="left">Left side on every page</option>
+              <option value="outer">Outer edge: right on fronts, left on backs</option>
+            </select>
           </label>
+          <p class="hint under" id="nsSideHint">Same side on every page is easiest to write on. Outer edge keeps notes away from staples or spiral binding.</p>
           <label class="c"><input type="checkbox" id="nsCornell">
             <span>Add Cornell headings<span class="hint">“Questions” beside the page, to answer later with the page covered, and “Summary” below it, for the main points in your own words.</span></span>
           </label>
@@ -616,10 +621,11 @@ function planLayout(sessions, o, aspectOf) {
         sides.push({ w: W, h: H, notes, cells: [{ x: m, y: H - m - h, w, h, slot, align: 'topleft' }] });
       }
       if (sides.length % 2) sides.push(blankSide(W, H));
-      // Backs are mirrored so the notes stay on the outer edge, away from staples or binding.
-      if (o.nsOuter !== false) sides.forEach((sd, k) => {
-        if (k % 2) for (const b of [...sd.cells, ...(sd.notes || [])]) { b.x = sd.w - b.x - b.w; if (b.align === 'topleft') b.align = 'topright'; }
-      });
+      // Notes are planned on the right. "left" mirrors every side; "outer" mirrors only the backs,
+      // which keeps notes on the outer edge, away from staples or binding.
+      const side = place === 'below' ? 'right' : (o.nsSide || (o.nsOuter === false ? 'right' : 'outer'));
+      const mirror = (sd) => { for (const b of [...sd.cells, ...(sd.notes || [])]) { b.x = sd.w - b.x - b.w; if (b.align === 'topleft') b.align = 'topright'; } };
+      sides.forEach((sd, k) => { if (side === 'left' || (side === 'outer' && k % 2)) mirror(sd); });
       pages.push(...sides);
     } else if (L.kind === 'notes') {
       const sides = [], aw = PW - 2 * m, ah = PH - 2 * m, gap = 5 * MM;
@@ -1212,7 +1218,7 @@ const ICONS = (() => {
 $('layouts').innerHTML = Object.entries(LAYOUTS).map(([k, L], i) =>
   `<label class="tile"><input type="radio" name="layout" value="${k}" ${i === 0 ? 'checked' : ''}><svg viewBox="0 0 56 40" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">${ICONS[k] || ''}</svg>${L.name}</label>`).join('');
 
-const fields = ['range', 'split', 'sessionSize', 'recall', 'trim', 'trimMode', 'pad', 'paper', 'margin', 'gutter', 'cleanup', 'textSize', 'cardsPerSheet', 'cardPairs', 'bind', 'nsOrient', 'nsPlace', 'nsStyle', 'nsSize', 'nsOuter', 'nsCornell'];
+const fields = ['range', 'split', 'sessionSize', 'recall', 'trim', 'trimMode', 'pad', 'paper', 'margin', 'gutter', 'cleanup', 'textSize', 'cardsPerSheet', 'cardPairs', 'bind', 'nsOrient', 'nsPlace', 'nsStyle', 'nsSize', 'nsSide', 'nsCornell'];
 
 function readOpts() {
   return {
@@ -1224,7 +1230,7 @@ function readOpts() {
     cardsPerSheet: +$('cardsPerSheet').value || 8, cardPairs: $('cardPairs').value,
     bind: Math.min(30, Math.max(0, +$('bind').value || 0)),
     nsOrient: $('nsOrient').value, nsPlace: $('nsPlace').value, nsStyle: $('nsStyle').value,
-    nsSize: +$('nsSize').value || 65, nsOuter: $('nsOuter').checked, nsCornell: $('nsCornell').checked,
+    nsSize: +$('nsSize').value || 65, nsSide: $('nsSide').value, nsCornell: $('nsCornell').checked,
   };
 }
 
@@ -1236,7 +1242,9 @@ function loadSettings() {
     const r = document.querySelector(`input[name=layout][value="${o.layout}"]`); if (r) r.checked = true;
     for (const k of fields) {
       if (k === 'range' || !(k in o)) continue;
-      const el = $(k); if (el.type === 'checkbox') el.checked = o[k]; else el.value = o[k];
+      const el = $(k); if (!el) continue;
+      if (el.type === 'checkbox') el.checked = o[k];
+      else if (el.tagName !== 'SELECT' || [...el.options].some(op => op.value === String(o[k]))) el.value = o[k];
     }
   } catch (e) {}
 }
@@ -1320,6 +1328,7 @@ function updatePreview() {
   const bindable = kind === 'nup' || kind === 'notes' || kind === 'notesheet' || kind === 'cutstack';
   $('nsPanel').hidden = kind !== 'notesheet';
   $('nsSizeOut').textContent = o.nsSize + '%';
+  $('nsSideField').hidden = $('nsSideHint').hidden = o.nsPlace === 'below';
   $('bindField').hidden = !bindable; $('bindHint').hidden = !bindable;
   $('cardPanel').hidden = !isCards;
   $('splitRow').hidden = isCards; $('recallRow').hidden = isCards;
